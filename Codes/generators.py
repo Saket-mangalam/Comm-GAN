@@ -1,4 +1,4 @@
-__author__ = 'yihanjiang'
+
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -225,3 +225,50 @@ class gridrnn_Generator(nn.Module):
         img      = self.conv_blocks(zz)
 
         return img
+    
+class Hidden_Generator(nn.Module):
+    def __init__(self, args):
+        super(Hidden_Generator, self).__init__()
+
+        self.args      = args
+        self.img_shape = (args.img_channel, args.img_size, args.img_size)
+
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+
+        #self.init_size = args.img_size // 4
+        self.init_size = args.img_size
+        
+        def block(in_feat, out_feat, normalize=True):
+            layers = [  nn.Conv2d(in_feat, out_feat, 3, stride = 1, padding = 1)]
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        self.conv_block_1 = nn.Sequential(
+                *block(self.args.Channels,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64)
+                )
+        
+        self.conv_block_2 = nn.Sequential(
+                *block(1,self.args.Latent_channels))
+        
+        self.conv_block_3 = nn.Sequential(
+                *block((64+self.args.Latent_channels+self.args.Channels),64),
+                nn.Conv2d(64, self.args.Channels, 1, stride = 1, padding = 0)
+                )
+        
+        self.l1 = nn.Sequential(nn.Linear(args.block_len, self.init_size**2))
+        
+        def forward(self,z,u):
+            encready_u = self.conv_block_1(u)
+            z = self.l1(z)
+            z = z.view(z.shape[0], 1, self.init_size, self.init_size)
+            encready_z = self.conv_block_2(z)
+            enc = torch.cat([encready_u,encready_z,u], dim = 1)
+            enc = self.conv_block_3(enc)
+            return enc
+        
