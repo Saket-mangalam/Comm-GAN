@@ -56,7 +56,7 @@ if __name__ == '__main__':
 
     # Loss function, we just use BCE this time.
     BCELoss = torch.nn.BCELoss()
-
+    MSELoss = torch.nn.MSELoss()
     ########################################################
     # Setup GAN structures: TBD: select the right G,D and Dec
     ########################################################
@@ -67,8 +67,10 @@ if __name__ == '__main__':
         from generators import rnn_Generator as Generator
     elif args.g_type == 'gridrnn_dcnn':
         from generators import gridrnn_Generator as Generator
+    elif args.g_type == 'hidden':
+        from generators import Hidden_Generator as Generator
     else:
-        from generators import gridrnn_Generator as Generator
+        from generators import FCNN_Generator as Generator
 
     if args.dec_type == 'dcgan':
         from decoders import DCGAN_Decoder as Decoder
@@ -76,13 +78,18 @@ if __name__ == '__main__':
         from decoders import rnn_Decoder as Decoder
     elif args.dec_type == 'gridrnn_dcnn':
         from decoders import gridrnn_Decoder as Decoder
+    elif args.dec_type == 'hidden':
+        from decoders import Hidden_Decoder as Decoder
     else:
         from decoders import gridrnn_Decoder as Decoder
 
     if args.d_type == 'dcgan':
         from discriminators import DCGAN_discriminator as Discriminator
+    #elif args.d_type == 'hidden':
     else:
-        from discriminators import DCGAN_discriminator as Discriminator
+        from discriminators import Hidden_discriminator as Discriminator
+    #else:
+    #from discriminators import DCGAN_discriminator as Discriminator
 
     generator     = Generator(args)
     decoder       = Decoder(args)
@@ -93,6 +100,7 @@ if __name__ == '__main__':
         discriminator.cuda()
         decoder.cuda()
         BCELoss.cuda()
+        MSELoss.cuda()
     else:
         print('models', generator, discriminator, decoder)
 
@@ -188,7 +196,7 @@ if __name__ == '__main__':
         optimizer_Dec = torch.optim.RMSprop(decoder.parameters(), lr=args.lr)
         optimizer_D   = torch.optim.RMSprop(discriminator.parameters(), lr=args.lr)
 
-    else: # fefault is DCGAN optimizer
+    else: # default is DCGAN optimizer
         optimizer_G   = torch.optim.Adam(generator.parameters(), lr=args.lr, betas=(args.b1, args.b2))
         optimizer_Dec = torch.optim.Adam(decoder.parameters(), lr=args.lr, betas=(args.b1, args.b2))
         optimizer_D   = torch.optim.Adam(discriminator.parameters(), lr=args.lr, betas=(args.b1, args.b2))
@@ -234,7 +242,14 @@ if __name__ == '__main__':
                     # DCGAN
                     # train generator to optimize both Channel AE + GAN
                     g_loss =    (1.0 - args.dec_weight) * BCELoss(discriminator(gen_imgs), valid) + \
-                                args.dec_weight * BCELoss(decoded_info, u)
+                                   args.dec_weight * BCELoss(decoded_info, u)
+                
+                elif args.gan_type == 'hidden':
+                    #hidden loss to optimize Channel Encoder + image reconstruction + Adversary
+                    g_loss = (1.0 - args.lambda_I - args.lambda_G)*BCELoss(decoded_info,u) + \
+                                args.lambda_I * MSELoss(gen_imgs,z) + \
+                                args.lambda_G * BCELoss(discriminator(gen_imgs), valid)
+                    
 
                 elif args.gan_type == 'wgan' or args.gan_type == 'wgan_gp':
                     g_loss = (1.0 - args.dec_weight) * (-torch.mean(discriminator(gen_imgs))) + \

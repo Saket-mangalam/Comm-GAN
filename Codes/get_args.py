@@ -6,9 +6,9 @@ def get_args():
 
     parser.add_argument('-is_save_model', type=int, default=0, help ='0:not save weight. 1: save weight') # not functional
 
-    parser.add_argument('-g_type', choices = ['dcgan','rnn_dcnn','gridrnn_dcnn'], default='dcgan', help='Choose G')
-    parser.add_argument('-d_type', choices = ['dcgan'], default='dcgan', help='Choose D')
-    parser.add_argument('-dec_type', choices = ['dcgan','rnn_dcnn','gridrnn_dcnn'], default='dcgan', help='Choose Dec')
+    parser.add_argument('-g_type', choices = ['dcgan','rnn_dcnn','gridrnn_dcnn','hidden'], default='dcgan', help='Choose G')
+    parser.add_argument('-d_type', choices = ['dcgan','hidden'], default='dcgan', help='Choose D')
+    parser.add_argument('-dec_type', choices = ['dcgan','rnn_dcnn','gridrnn_dcnn','hidden'], default='dcgan', help='Choose Dec')
 
     # not functional
     parser.add_argument('-dataset', choices = ['mnist','cifar10','yihan_selfie'], default='mnist', help='choose dataset for GAN training')
@@ -35,7 +35,10 @@ def get_args():
     parser.add_argument('-b2', type=float, default=0.999, help='adam: decay of first order momentum of gradient')
 
     parser.add_argument('-n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
-
+    
+    parser.add_argument('-lambda_I' , type=float, default=0.1, help='relative weight of image distortion loss(Hidden)')
+    parser.add_argument('-lambda_G' , type=float, default=0.1, help='relative weight of adversarial loss, the ability of the discriminator to detect an encoded image')
+    
     # For Mnist, use (32,32) with 1 channel.
     parser.add_argument('-latent_dim', type=int, default=100, help='dimensionality of the latent space')
     parser.add_argument('-n_classes', type=int, default=10, help='number of classes for dataset')
