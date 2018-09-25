@@ -1,4 +1,4 @@
-__author__ = 'yihanjiang'
+
 import argparse
 
 def get_args():
@@ -18,7 +18,7 @@ def get_args():
     parser.add_argument('-num_train_D', type=int, default=1)
     parser.add_argument('-num_train_Dec', type=int, default=1)
 
-    parser.add_argument('-num_epoch', type=int, default=3, help='number of epochs of training')
+    parser.add_argument('-num_epoch', type=int, default=25, help='number of epochs of training')
     parser.add_argument('-batch_size', type=int, default=64, help='size of the batches')
 
     parser.add_argument('-enc_num_unit', type=int, default=25)
@@ -44,12 +44,15 @@ def get_args():
 
     parser.add_argument('-sample_interval', type=int, default=400, help='interval between image sampling')
 
-    parser.add_argument('-block_len', type=int, default=100, help='how much bit information to disguise')
+    parser.add_argument('-block_len', type=int, default=10, help='how much bit information to disguise')
     parser.add_argument('-channel_type', choices = ['slides', 'awgn', 'basic_quantize'], default='basic_quantize', help='channel')
 
     parser.add_argument('-sample_noise_image', type=int, default=1, help='sample data with noise pattern')
 
     parser.add_argument('-noise_std', type=float, default=0.1, help='noise as a regularizer')
+    
+    parser.add_argument('-Channels', type=int, default=3, help='number of channels in image file, 1 if grayscale, 3 if rgb')
+    parser.add_argument('-Latent_channels', type=int, default=5, help='L no. of channels of message added for convolution as LxHxW')
 
     opt = parser.parse_args()
     print(opt)

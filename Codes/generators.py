@@ -237,7 +237,7 @@ class Hidden_Generator(nn.Module):
         self.this_device = torch.device("cuda" if cuda else "cpu")
 
         #self.init_size = args.img_size // 4
-        self.init_size = args.img_size
+        #self.init_size = args.img_size
         
         def block(in_feat, out_feat, normalize=True):
             layers = [  nn.Conv2d(in_feat, out_feat, 3, stride = 1, padding = 1)]
@@ -261,7 +261,7 @@ class Hidden_Generator(nn.Module):
                 nn.Conv2d(64, self.args.Channels, 1, stride = 1, padding = 0)
                 )
         
-        self.l1 = nn.Sequential(nn.Linear(args.block_len, self.init_size**2))
+        self.l1 = nn.Sequential(nn.Linear(self.args.block_len, self.args.img_size**2))
         
         def forward(self,z,u):
             encready_u = self.conv_block_1(u)

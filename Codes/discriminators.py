@@ -1,4 +1,4 @@
-__author__ = 'yihanjiang'
+
 
 
 import torch.nn as nn
@@ -22,7 +22,7 @@ class DCGAN_discriminator(nn.Module):
             *discriminator_block(args.img_channel, 16, bn=False),
             *discriminator_block(16, 32),
             *discriminator_block(32, 64),
-            *discriminator_block(64, 128),
+            *discriminator_block(64, 128)
         )
 
         # The height and width of downsampled image
@@ -37,3 +37,36 @@ class DCGAN_discriminator(nn.Module):
         return validity
 
 
+class Hidden_discriminator(nn.Module):
+    def __init__(self,args):
+        super(Hidden_discriminator,self).__init__()
+        
+        self.args = args
+        
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+        
+        def block(in_filters,out_filters, normalize=True):
+            block = [ nn.Conv2d(in_filters,out_filters,3,stride=1,padding=1)]
+            if normalize:
+                block.append(nn.BatchNorm2d(out_filters, 0.8))
+            block.append(nn.LeakyReLU(0.2, inplace=True))
+            return block
+        
+        self.model = nn.Sequential(
+                *block(self.args.img_channel,64),
+                *block(64,64),
+                *block(64,64))
+        
+        self.pool = nn.Sequential(nn.AvgPool3d(kernel_size = (64,1,1), stride = 1, padding=0))
+        
+        self.logits = nn.Sequential(nn.Linear(self.args.img_size**2,1),
+                                    nn.Sigmoid())
+        
+    def forward(self,img):
+        conv = self.model(img)
+        conv = self.pool(conv)
+        validity = self.logits(conv)
+        return validity
+    
+        

@@ -1,4 +1,4 @@
-__author__ = 'yihanjiang'
+
 import torch
 import numpy as np
 

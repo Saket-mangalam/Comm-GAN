@@ -136,3 +136,42 @@ class gridrnn_Decoder(nn.Module):
 
         return decoded
 
+class Hidden_decoder(nn.Module):
+    def __init__(self, args):
+        super(gridrnn_Decoder, self).__init__()
+
+        self.args = args
+
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+        
+        def block(in_filters,out_filters,normalize=True):
+            block = [ nn.Conv2d(in_filters,out_filters,3,stride=1,padding=1)]
+            if normalize:
+                block.append(nn.BatchNorm2d(out_filters, 0.8))
+            block.append(nn.LeakyReLU(0.2, inplace=True))
+            return block
+        
+        self.model = nn.Sequential(
+                *block(self.args.img_channel,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,self.args.Latent_channels))
+        
+        self.pool = nn.Sequential(nn.AvgPool3d(kernel_size = (self.args.Latent_channels,1,1), stride = 1, padding=0))
+        
+        self.l1 = nn.Sequential(nn.Linear(self.args.img_size**2,self.args.block_len))
+        
+        def forward(self,img):
+            out = self.model(img)
+            out = self.pool(out)
+            out = out.view(out.shape[0],-1)
+            out = self.l1(out)
+            return out
+        
+            
+            
