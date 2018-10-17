@@ -13,8 +13,7 @@ class SpectralNormalization(nn.Module):
         super(SpectralNormalization, self).__init__()
         self.module = module
         self.power_iterations = power_iterations
-        if not self._made_params():
-            self._make_params()
+        
     
     def normalize(self, x, eps =1e-10):
         return x/(x.norm()+eps)
@@ -25,7 +24,7 @@ class SpectralNormalization(nn.Module):
         weight = getattr(self.module, "weight_bar")
 
         h = weight.data.shape[0]
-        for _ in range(self.power_iterations):
+        for i in range(self.power_iterations):
             width.data = normalize(torch.mv(torch.t(weight.view(h,-1).data), height.data))
             height.data = normalize(torch.mv(weight.view(h,-1).data, width.data))
 
@@ -34,5 +33,5 @@ class SpectralNormalization(nn.Module):
         setattr(self.module, weight / sigma.expand_as(weight))
         
     def forward(self, *args):
-        self.normalize()
+        self.normalize(*args)
         return self.module.forward(*args)

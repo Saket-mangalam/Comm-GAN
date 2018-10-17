@@ -2,16 +2,21 @@
 
 
 import torch.nn as nn
-import torch.nn.functional as F
+#import torch.nn.functional as F
 import torch
-
+from SpectralNormalization import SpectralNormalization
 
 class DCGAN_discriminator(nn.Module):
     def __init__(self, args):
         super(DCGAN_discriminator, self).__init__()
 
-        def discriminator_block(in_filters, out_filters, bn=True):
-            block = [   nn.Conv2d(in_filters, out_filters, 3, 2, 1),
+        def discriminator_block(in_filters, out_filters, bn=True, specnorm = True):
+            if specnorm :
+                block = [   SpectralNormalization(nn.Conv2d(in_filters, out_filters, 3, 2, 1)),
+                        nn.LeakyReLU(0.2, inplace=True),
+                        nn.Dropout2d(0.25)]
+            else:
+                block = [ nn.Conv2d(in_filters, out_filters, 3, 2, 1),
                         nn.LeakyReLU(0.2, inplace=True),
                         nn.Dropout2d(0.25)]
             if bn:
@@ -46,8 +51,11 @@ class Hidden_discriminator(nn.Module):
         cuda = True if torch.cuda.is_available() else False
         self.this_device = torch.device("cuda" if cuda else "cpu")
         
-        def block(in_filters,out_filters, normalize=True):
-            block = [ nn.Conv2d(in_filters,out_filters,3,stride=1,padding=1)]
+        def block(in_filters,out_filters, normalize=True, specnorm = True):
+            if specnorm:
+                block = [ SpectralNormalization(nn.Conv2d(in_filters,out_filters,3,stride=1,padding=1))]
+            else:
+                block = [ nn.Conv2d(in_filters,out_filters,3,stride=1,padding=1)]
             if normalize:
                 block.append(nn.BatchNorm2d(out_filters, 0.8))
             block.append(nn.LeakyReLU(0.2, inplace=True))
@@ -58,15 +66,17 @@ class Hidden_discriminator(nn.Module):
                 *block(64,64),
                 *block(64,64))
         
-        self.pool = nn.Sequential(nn.AvgPool3d(kernel_size = (64,1,1), stride = 1, padding=0))
-        
-        self.logits = nn.Sequential(nn.Linear(self.args.img_size**2,1),
-                                    nn.Sigmoid())
+        #ds_size = args.img_size // 2**4
+        self.avgpool = nn.Sequential(nn.AvgPool3d(kernel_size = (64,self.args.img_size,self.args.img_size), stride = 1, padding=0),
+                                  nn.Sigmoid())
+        #self.adv_layer = nn.Sequential( nn.Linear(64*ds_size**2, 1),nn.Sigmoid())
+
         
     def forward(self,img):
         conv = self.model(img)
-        conv = self.pool(conv)
-        validity = self.logits(conv)
+        conv = self.avgpool(conv)
+        conv = conv.view(conv.shape[0],-1)
+        validity = conv
         return validity
     
         

@@ -231,7 +231,7 @@ class Hidden_Generator(nn.Module):
         super(Hidden_Generator, self).__init__()
 
         self.args      = args
-        self.img_shape = (args.img_channel, args.img_size, args.img_size)
+        #self.img_shape = (args.img_channel, args.img_size, args.img_size)
 
         cuda = True if torch.cuda.is_available() else False
         self.this_device = torch.device("cuda" if cuda else "cpu")
@@ -253,22 +253,36 @@ class Hidden_Generator(nn.Module):
                 *block(64,64)
                 )
         
-        self.conv_block_2 = nn.Sequential(
-                *block(1,self.args.Latent_channels))
         
-        self.conv_block_3 = nn.Sequential(
-                *block((64+self.args.Latent_channels+self.args.Channels),64),
+        self.conv_block_2 = nn.Sequential(
+                *block((64+self.args.block_len+self.args.Channels),64),
                 nn.Conv2d(64, self.args.Channels, 1, stride = 1, padding = 0)
                 )
         
-        self.l1 = nn.Sequential(nn.Linear(self.args.block_len, self.args.img_size**2))
         
-        def forward(self,z,u):
-            encready_u = self.conv_block_1(u)
-            z = self.l1(z)
-            z = z.view(z.shape[0], 1, self.init_size, self.init_size)
-            encready_z = self.conv_block_2(z)
-            enc = torch.cat([encready_u,encready_z,u], dim = 1)
-            enc = self.conv_block_3(enc)
-            return enc
+    def forward(self,z,u):
+        encready_z = self.conv_block_1(z)
+            #u = self.l1(u)
+            #u = u.view(u.shape[0], 1, self.init_size, self.init_size)
+            
+            #u.unsqueeze_(-1)
+            #u = u.expand(self.args.batch_size, self.args.block_len, self.args.img_size, self.args.img_size)
+            #u.unsqueeze_(-1)
+            #u = u.expand(self.args.block_len,self.args.img_size,self.args.img_size)
+            
+        x = torch.zeros(self.args.img_size)
+        u = torch.add(u,1,x)
+        u = u.unsqueeze_(-1)
+        u = u.expand(self.args.block_len,self.args.img_size,self.args.img_size)
+        u = u.unsqueeze_(0)
+        u = u.expand(self.args.batch_size,self.args.block_len,self.args.img_size,self.args.img_size) 
+    
+        enc = torch.cat([u,encready_z,z], dim = 1)
+        enc = self.conv_block_2(enc)
+        return enc
         
+
+      
+        
+if __name__ == '__main__':
+    print('Generators initialized')

@@ -227,15 +227,16 @@ if __name__ == '__main__':
                 optimizer_G.zero_grad()
 
                 # Sample noise as generator input
-                z = Variable(Tensor(np.random.normal(0, 1, (imgs.shape[0], args.latent_dim))))
-                u = torch.randint(0, 2, (args.batch_size, args.block_len, 1), dtype=torch.float).to(device)
-
+                #z = real_imgs
+                #z = Variable(Tensor(np.random.normal(0, 1, (imgs.shape[0], args.latent_dim))))
+                u = torch.randint(0, 2, (args.block_len, 1), dtype=torch.float).to(device)
+                
                 # Generate a batch of images
-                gen_imgs = generator(z, u)
+                gen_imgs = generator(real_imgs, u)
 
                 # Loss measures generator's ability to fool the discriminator
-                received_imgs = channel(gen_imgs, args.noise_std, channel_type = args.channel_type, device = device)
-
+                #received_imgs = channel(gen_imgs, args.noise_std, channel_type = args.channel_type, device = device)
+                received_imgs = gen_imgs
                 decoded_info = decoder(received_imgs)
 
                 if args.gan_type == 'dcgan':
@@ -247,8 +248,8 @@ if __name__ == '__main__':
                 elif args.gan_type == 'hidden':
                     #hidden loss to optimize Channel Encoder + image reconstruction + Adversary
                     g_loss = (1.0 - args.lambda_I - args.lambda_G)*BCELoss(decoded_info,u) + \
-                                args.lambda_I * MSELoss(gen_imgs,z) + \
-                                args.lambda_G * BCELoss(discriminator(gen_imgs), valid)
+                                args.lambda_I * MSELoss(gen_imgs,real_imgs) + \
+                                args.lambda_G *((BCELoss(discriminator(gen_imgs), fake) + BCELoss(discriminator(real_imgs),valid))/2)
                     
 
                 elif args.gan_type == 'wgan' or args.gan_type == 'wgan_gp':
@@ -270,11 +271,11 @@ if __name__ == '__main__':
                 optimizer_Dec.zero_grad()
 
                 # Sample noise as generator input
-                z = Variable(Tensor(np.random.normal(0, 1, (imgs.shape[0], args.latent_dim))))
-                u = torch.randint(0, 2, (args.batch_size, args.block_len, 1), dtype=torch.float).to(device)
+                #z = Variable(Tensor(np.random.normal(0, 1, (imgs.shape[0], args.latent_dim))))
+                u = torch.randint(0, 2, (args.block_len, 1), dtype=torch.float).to(device)
 
                 # Generate a batch of images
-                gen_imgs = generator(z, u)
+                gen_imgs = generator(real_imgs, u)
 
                 # Loss measures generator's ability to fool the discriminator
                 received_imgs = channel(gen_imgs, args.noise_std, channel_type = args.channel_type, device = device)
@@ -291,7 +292,10 @@ if __name__ == '__main__':
             # ---------------------
             for idx in range(args.num_train_D):
                 optimizer_D.zero_grad()
-
+                
+                u = torch.randint(0, 2, (args.block_len, 1), dtype=torch.float).to(device)
+                gen_imgs = generator(real_imgs,u)
+                
                 if args.gan_type == 'dcgan':
                     # Measure discriminator's ability to classify real from generated samples
                     real_loss = BCELoss(discriminator(real_imgs), valid)
@@ -311,6 +315,13 @@ if __name__ == '__main__':
                     gradient_penalty = compute_gradient_penalty(discriminator, real_imgs.data, fake_imgs.data)
                     # Adversarial loss
                     d_loss = -torch.mean(real_validity) + torch.mean(fake_validity) + args.lambda_gp * gradient_penalty
+                    d_loss.backward()
+                    optimizer_D.step()
+                    
+                elif args.gan_type == 'hidden':
+                    real_loss = BCELoss(discriminator(real_imgs),valid)
+                    fake_loss = BCELoss(discriminator(gen_imgs.detach()), fake)
+                    d_loss = (real_loss + fake_loss) / 2
                     d_loss.backward()
                     optimizer_D.step()
 
