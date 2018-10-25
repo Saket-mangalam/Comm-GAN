@@ -247,7 +247,7 @@ class Hidden_Generator(nn.Module):
             return layers
         
         self.conv_block_1 = nn.Sequential(
-                *block(self.args.Channels,64),
+                *block(self.args.img_channel,64),
                 *block(64,64),
                 *block(64,64),
                 *block(64,64)
@@ -255,8 +255,9 @@ class Hidden_Generator(nn.Module):
         
         
         self.conv_block_2 = nn.Sequential(
-                *block((64+self.args.block_len+self.args.Channels),64),
-                nn.Conv2d(64, self.args.Channels, 1, stride = 1, padding = 0)
+                *block((64+self.args.block_len+self.args.img_channel),64),
+                nn.Conv2d(64, self.args.img_channel, 1, stride = 1, padding = 0),
+                nn.BatchNorm2d(self.args.img_channel, 0.8)
                 )
         
         
@@ -270,12 +271,12 @@ class Hidden_Generator(nn.Module):
             #u.unsqueeze_(-1)
             #u = u.expand(self.args.block_len,self.args.img_size,self.args.img_size)
             
-        x = torch.zeros(self.args.img_size)
-        u = torch.add(u,1,x)
-        u = u.unsqueeze_(-1)
-        u = u.expand(self.args.block_len,self.args.img_size,self.args.img_size)
-        u = u.unsqueeze_(0)
-        u = u.expand(self.args.batch_size,self.args.block_len,self.args.img_size,self.args.img_size) 
+        # x = torch.zeros(self.args.img_size)
+        #u = torch.add(u,1,x)
+        #u = u.unsqueeze_(-1)
+        #u = u.expand(self.args.block_len,self.args.img_size,self.args.img_size)
+        #u = u.unsqueeze_(0)
+        #u = u.expand(self.args.batch_size,self.args.block_len,self.args.img_size,self.args.img_size) 
     
         enc = torch.cat([u,encready_z,z], dim = 1)
         enc = self.conv_block_2(enc)

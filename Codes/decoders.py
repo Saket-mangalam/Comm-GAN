@@ -1,4 +1,4 @@
-__author__ = 'yihanjiang'
+
 
 
 import torch.nn as nn
@@ -172,8 +172,8 @@ class Hidden_Decoder(nn.Module):
         #out = out.permute(0,2,3,1)
         #out = out.view(out.shape[0],-1)
         out = self.pool(out)
-        out = torch.mean(out,0)
-        out = out.view(out.shape[0],-1)
+        #out = torch.mean(out,0)
+        #out = out.view(out.shape[0],-1)
         #out = self.adv_layer(out)
         
         return out

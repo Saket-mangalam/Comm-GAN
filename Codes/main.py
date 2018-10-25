@@ -8,8 +8,8 @@ from utils import channel, errors_ber, weights_init_normal
 
 import torchvision.transforms as transforms
 from torchvision.utils import save_image
-
-from torch.utils.data import DataLoader
+from datagenerator import Datagen
+#from torch.utils.data import DataLoader
 from torchvision import datasets
 from torch.autograd import Variable
 
@@ -171,7 +171,21 @@ if __name__ == '__main__':
                                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
                            ])),
             batch_size=args.batch_size, shuffle=True)
-
+    elif args.dataset == 'mypic':
+        train_dataloader = torch.utils.data.DataLoader(Datagen(args,
+                              transform=transforms.Compose([
+                                      transforms.Resize((32,32)),
+                                      transforms.ToTensor(),
+                                      transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+                                           ])),
+                        batch_size=args.batch_size, shuffle=True)
+        test_dataloader = torch.utils.data.DataLoader(Datagen(args,
+                              transform=transforms.Compose([
+                                      transforms.Resize((32,32)),
+                                      transforms.ToTensor(),
+                                      transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+                                           ])),
+                        batch_size=args.batch_size, shuffle=True)
     else:
         print('hahahaha dataset is unknown')
 

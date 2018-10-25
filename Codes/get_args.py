@@ -11,18 +11,18 @@ def get_args():
     parser.add_argument('-dec_type', choices = ['dcgan','rnn_dcnn','gridrnn_dcnn','hidden'], default='hidden', help='Choose Dec')
 
     # not functional
-    parser.add_argument('-dataset', choices = ['mnist','cifar10','yihan_selfie'], default='mnist', help='choose dataset for GAN training')
-
+    parser.add_argument('-dataset', choices = ['mnist','cifar10','yihan_selfie','mypic'], default='mypic', help='choose dataset for GAN training')
+    parser.add_argument('-root_dir',choices = ['C:/study]/representation_learning/Hidden_gan/mypic/'], default='C:/study]/representation_learning/Hidden_gan/mypic/', help = 'directory of your dataset to lead. for single images')
 
     parser.add_argument('-num_train_G', type=int, default=1)
     parser.add_argument('-num_train_D', type=int, default=1)
-    parser.add_argument('-num_train_Dec', type=int, default=1)
+    parser.add_argument('-num_train_Dec', type=int, default=2)
 
-    parser.add_argument('-num_epoch', type=int, default=25, help='number of epochs of training')
+    parser.add_argument('-num_epoch', type=int, default=25000, help='number of epochs of training')
     parser.add_argument('-batch_size', type=int, default=64, help='size of the batches')
 
-    parser.add_argument('-enc_num_unit', type=int, default=25)
-    parser.add_argument('-dec_num_unit', type=int, default=100)
+    parser.add_argument('-enc_num_unit', type=int, default=10)
+    parser.add_argument('-dec_num_unit', type=int, default=10)
     parser.add_argument('-code_rate', type=int, default=2)
 
     parser.add_argument('-dec_weight', type=float, default=0.99, help = 'how much to address the decoder (0 to 1)')
@@ -40,10 +40,10 @@ def get_args():
     parser.add_argument('-lambda_G' , type=float, default=0.1, help='relative weight of adversarial loss, the ability of the discriminator to detect an encoded image')
     
     # For Mnist, use (32,32) with 1 channel.
-    parser.add_argument('-latent_dim', type=int, default=100, help='dimensionality of the latent space')
+    parser.add_argument('-latent_dim', type=int, default=10, help='dimensionality of the latent space')
     parser.add_argument('-n_classes', type=int, default=10, help='number of classes for dataset')
     parser.add_argument('-img_size', type=int, default=32, help='size of each image dimension')
-    parser.add_argument('-img_channel', type=int, default=1, help='number of image channels')
+    parser.add_argument('-img_channel', type=int, default=3, help='number of image channels')
 
     parser.add_argument('-sample_interval', type=int, default=400, help='interval between image sampling')
 
@@ -54,8 +54,6 @@ def get_args():
 
     parser.add_argument('-noise_std', type=float, default=0.1, help='noise as a regularizer')
     
-    parser.add_argument('-Channels', type=int, default=1, help='number of channels in image file, 1 if grayscale, 3 if rgb')
-    parser.add_argument('-Latent_channels', type=int, default=5, help='L no. of channels of message added for convolution as LxHxW')
 
     opt = parser.parse_args()
     print(opt)
