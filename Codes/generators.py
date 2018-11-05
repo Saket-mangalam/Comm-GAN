@@ -226,9 +226,9 @@ class gridrnn_Generator(nn.Module):
 
         return img
     
-class Hidden_Generator(nn.Module):
+class Hidden_Generator_1(nn.Module):
     def __init__(self, args):
-        super(Hidden_Generator, self).__init__()
+        super(Hidden_Generator_1, self).__init__()
 
         self.args      = args
         #self.img_shape = (args.img_channel, args.img_size, args.img_size)
@@ -273,17 +273,88 @@ class Hidden_Generator(nn.Module):
             
         # x = torch.zeros(self.args.img_size)
         #u = torch.add(u,1,x)
-        #u = u.unsqueeze_(-1)
-        #u = u.expand(self.args.block_len,self.args.img_size,self.args.img_size)
-        #u = u.unsqueeze_(0)
+        u = u.unsqueeze_(-1)
+        u = u.expand(self.args.batch_size,self.args.block_len,self.args.img_size)
+        u = u.unsqueeze_(-1)
         #u = u.expand(self.args.batch_size,self.args.block_len,self.args.img_size,self.args.img_size) 
-    
-        enc = torch.cat([u,encready_z,z], dim = 1)
+        encodable_u = u.expand(self.args.batch_size,self.args.block_len,self.args.img_size,self.args.img_size)
+        enc = torch.cat([encodable_u,encready_z,z], dim = 1)
         enc = self.conv_block_2(enc)
         return enc
         
 
-      
+
+class Hidden_Generator_2(nn.Module):
+    def __init__(self, args):
+        super(Hidden_Generator_2, self).__init__()
+
+        self.args      = args
+        #self.img_shape = (args.img_channel, args.img_size, args.img_size)
+
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+
+        #self.init_size = args.img_size // 4
+        #self.init_size = args.img_size
+        
+        def block(in_feat, out_feat, normalize=True):
+            layers = [  nn.Conv2d(in_feat, out_feat, 3, stride = 1, padding = 1)]
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        def c_block(in_feat, out_feat, normalize=True):
+            layers = [ nn.Conv1d(in_feat,out_feat,3,stride = 1, padding = 1)]
+            if normalize:
+                layers.append(nn.BatchNorm1d(out_feat, 0.8))
+            layers.append(nn.ELU(0.2, inplace=True))
+            return layers
+        
+        self.conv1d_block = nn.Sequential(
+                *c_block(1,3),
+                *c_block(3,3),
+                *c_block(3,3))
+        
+        self.conv_block_1 = nn.Sequential(
+                *block(self.args.img_channel,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64)
+                )
+        
+        
+        self.conv_block_2 = nn.Sequential(
+                *block((64+self.args.block_len+self.args.img_channel),64),
+                nn.Conv2d(64, self.args.img_channel, 1, stride = 1, padding = 0),
+                nn.BatchNorm2d(self.args.img_channel, 0.8)
+                )
+        
+        
+    def forward(self,z,u):
+        encready_z = self.conv_block_1(z)
+        #u = self.l1(u)
+        #u = u.view(u.shape[0], 1, self.init_size, self.init_size)
+        
+        #u.unsqueeze_(-1)
+        #u = u.expand(self.args.batch_size, self.args.block_len, self.args.img_size, self.args.img_size)
+        #u.unsqueeze_(-1)
+        #u = u.expand(self.args.block_len,self.args.img_size,self.args.img_size)
+            
+        # x = torch.zeros(self.args.img_size)
+        #u = torch.add(u,1,x)
+        u = u.unsqueeze_(-1)
+        #u = u.expand(self.args.block_len,self.args.img_size,self.args.img_size)
+        #u = u.unsqueeze_(0)
+        #u = u.expand(self.args.batch_size,self.args.block_len,self.args.img_size,self.args.img_size) 
+        u = self.conv1d_block(u)
+        
+        encodable_u = u.expand(self.args.batch_size,3*self.args.block_len,self.args.img_size,self.args.img_size)
+        enc = torch.cat([encodable_u,encready_z,z], dim = 1)
+        enc = self.conv_block_2(enc)
+        return enc
+        
+
         
 if __name__ == '__main__':
     print('Generators initialized')
