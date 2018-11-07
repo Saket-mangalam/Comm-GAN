@@ -6,9 +6,9 @@ def get_args():
 
     parser.add_argument('-is_save_model', type=int, default=0, help ='0:not save weight. 1: save weight') # not functional
 
-    parser.add_argument('-g_type', choices = ['dcgan','rnn_dcnn','gridrnn_dcnn','hidden1','hidden2'], default='hidden2', help='Choose G')
-    parser.add_argument('-d_type', choices = ['dcgan','hidden1','hidden2'], default='hidden2', help='Choose D')
-    parser.add_argument('-dec_type', choices = ['dcgan','rnn_dcnn','gridrnn_dcnn','hidden1','hidden2'], default='hidden2', help='Choose Dec')
+    parser.add_argument('-g_type', choices = ['dcgan','rnn_dcnn','gridrnn_dcnn','hidden1','hidden2','hidden3'], default='hidden3', help='Choose G')
+    parser.add_argument('-d_type', choices = ['dcgan','hidden1','hidden2','hidden3'], default='hidden3', help='Choose D')
+    parser.add_argument('-dec_type', choices = ['dcgan','rnn_dcnn','gridrnn_dcnn','hidden1','hidden2','hidden3'], default='hidden3', help='Choose Dec')
 
     # not functional
     parser.add_argument('-dataset', choices = ['mnist','cifar10','yihan_selfie','mypic'], default='mypic', help='choose dataset for GAN training')
@@ -47,7 +47,7 @@ def get_args():
 
     parser.add_argument('-sample_interval', type=int, default=400, help='interval between image sampling')
 
-    parser.add_argument('-block_len', type=int, default=10, help='how much bit information to disguise')
+    parser.add_argument('-block_len', type=int, default=1024, help='how much bit information to disguise')
     parser.add_argument('-channel_type', choices = ['slides', 'awgn', 'basic_quantize'], default='slides', help='channel')
 
     parser.add_argument('-sample_noise_image', type=int, default=1, help='sample data with noise pattern')
