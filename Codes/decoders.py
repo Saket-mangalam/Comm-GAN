@@ -265,4 +265,53 @@ class Hidden_Decoder_3(nn.Module):
         return out
     
         
+    
+class Hidden_Decoder_4(nn.Module):
+    def __init__(self, args):
+        super(Hidden_Decoder_4, self).__init__()
         
+        self.args = args
+        
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+        
+        def block(in_filters,out_filters,normalize=True):
+            block = [ nn.Conv2d(in_filters,out_filters,3,stride=1,padding=1)]
+            if normalize:
+                block.append(nn.BatchNorm2d(out_filters, 0.8))
+            block.append(nn.LeakyReLU(0.2, inplace=True))
+            return block
+        
+        def conv_1d_block(in_feat,out_feat,normalize=True):
+            block = [nn.ConvTranspose1d(in_feat,out_feat,3,stride=1,padding=1)]
+            if normalize:
+                block.append(nn.BatchNorm1d(out_feat, 0.8))
+            block.append(nn.LeakyReLU(0.2, inplace=True))
+            return block
+        
+        self.model = nn.Sequential(
+                *block(self.args.img_channel,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,1))
+        
+        self.conv1 = nn.Sequential(
+                *conv_1d_block(256,128),
+                *conv_1d_block(128,64),
+                *conv_1d_block(64,1))
+        
+        self.sigmoid = nn.Sequential(nn.Sigmoid())
+        
+    def forward(self,img):
+        out = self.model(img) #64,1,32,32
+        out = out.view(self.args.batch_size,256,-1)#64,3,(32*32)
+        #out = out.permute(2,1,0)#(32*32),3,64
+        
+        out = self.conv1(out)#64,1,4
+        #out = out.permute(2,1,0)#64,1,(32*32)
+        out = out.view(self.args.batch_size,-1)#64,4
+        out = out.contiguous()
+        out = self.sigmoid(out)
+        return out

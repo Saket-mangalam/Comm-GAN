@@ -44,13 +44,13 @@ if __name__ == '__main__':
     # Setup GAN structures: TBD: select the right G,D and Dec
     ########################################################
 
-    if args.g_type == 'hidden3':
-        from generators import Hidden_Generator_3 as Generator
+    if args.g_type == 'hidden4':
+        from generators import Hidden_Generator_4 as Generator
     else:
         from generators import FCNN_Generator as Generator
 
-    if args.dec_type == 'hidden3':
-        from decoders import Hidden_Decoder_3 as Decoder
+    if args.dec_type == 'hidden4':
+        from decoders import Hidden_Decoder_4 as Decoder
     else:
         from decoders import gridrnn_Decoder as Decoder
 

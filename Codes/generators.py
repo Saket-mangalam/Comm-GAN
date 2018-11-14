@@ -427,6 +427,66 @@ class Hidden_Generator_3(nn.Module):
         enc = self.conv_block_2(enc)#64,3,32,32
         return enc
     
+
+class Hidden_Generator_4(nn.Module):
+    def __init__(self, args):
+        super(Hidden_Generator_4, self).__init__()
+
+        self.args      = args
+        #self.img_shape = (args.img_channel, args.img_size, args.img_size)
+
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+
+
+        
+        def block(in_feat, out_feat, normalize=True):
+            layers = [  nn.Conv2d(in_feat, out_feat, 3, stride = 1, padding = 1)]
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        def c_block(in_feat, out_feat, normalize=True):
+            layers = [ nn.Conv1d(in_feat,out_feat,3,stride = 1, padding = 1)]
+            if normalize:
+                layers.append(nn.BatchNorm1d(out_feat, 0.8))
+            layers.append(nn.ELU(0.2, inplace=True))
+            return layers
+        
+        self.conv1d_block = nn.Sequential(
+                *c_block(1,64),
+                *c_block(64,128),
+                *c_block(128,256))
+        
+        self.conv_block_1 = nn.Sequential(
+                *block(self.args.img_channel,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64)
+                )
+        
+        
+        self.conv_block_2 = nn.Sequential(
+                *block((65+self.args.img_channel),64),
+                nn.Conv2d(64, self.args.img_channel, 1, stride = 1, padding = 0),
+                nn.BatchNorm2d(self.args.img_channel, 0.8)
+                )
+        
+        
+    def forward(self,z,u):
+        #z is the image, u is message
+        encready_z = self.conv_block_1(z)
+        # u is of size 64, (4/4^2/4^3)
+        u = u.unsqueeze_(-1) # add 3rd dimension 64,4,1
+        u = u.permute(0,2,1)#make it 64,1,4
+        u = self.conv1d_block(u)# 64,256,4
+        #u = u.view(self.args.batch_size,-1) # 64,1024
+        u = u.view(self.args.batch_size,1,self.args.img_size,self.args.img_size)#64,1,32,32
+        enc = torch.cat([u,encready_z,z],dim=1)
+        enc = self.conv_block_2(enc)
+        return enc
+    
     
 if __name__ == '__main__':
     print('Generators initialized')
