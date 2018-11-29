@@ -47,8 +47,8 @@ def get_args():
 
     parser.add_argument('-sample_interval', type=int, default=400, help='interval between image sampling')
 
-    parser.add_argument('-block_len', type=int, default=4, help='how much bit information to disguise')
-    parser.add_argument('-channel_type', choices = ['slides', 'awgn', 'basic_quantize'], default='slides', help='channel')
+    parser.add_argument('-block_len', type=int, default=256, help='how much bit information to disguise')
+    parser.add_argument('-channel_type', choices = ['slides', 'awgn', 'basic_quantize'], default='awgn', help='channel')
 
     parser.add_argument('-sample_noise_image', type=int, default=1, help='sample data with noise pattern')
 

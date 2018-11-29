@@ -97,6 +97,45 @@ if __name__ == '__main__':
                                       transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
                                            ])),
                         batch_size=args.batch_size, shuffle=True)
+    elif args.dataset == 'mnist':
+        os.makedirs('./data/mnist', exist_ok=True)
+        train_dataloader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data/mnist', train=True, download=True,
+                           transform=transforms.Compose([
+                               transforms.Resize(args.img_size),
+                               transforms.ToTensor(),
+                               transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                           ])),
+            batch_size=args.batch_size, shuffle=True)
+
+        test_dataloader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data/mnist', train=False, download=True,
+                           transform=transforms.Compose([
+                               transforms.Resize(args.img_size),
+                               transforms.ToTensor(),
+                               transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                           ])),
+            batch_size=args.batch_size, shuffle=True)
+
+    elif args.dataset == 'cifar10':
+        os.makedirs('./data/cifar10', exist_ok=True)
+        train_dataloader = torch.utils.data.DataLoader(
+            datasets.CIFAR10('./data/cifar10', train=True, download=True,
+                           transform=transforms.Compose([
+                                transforms.RandomCrop(32, padding=4),
+                                transforms.RandomHorizontalFlip(),
+                                transforms.ToTensor(),
+                                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+                            ])),
+            batch_size=args.batch_size, shuffle=True)
+
+        test_dataloader = torch.utils.data.DataLoader(
+            datasets.CIFAR10('./data/cifar10', train=True, download=True,
+                           transform=transforms.Compose([
+                               transforms.ToTensor(),
+                               transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+                           ])),
+            batch_size=args.batch_size, shuffle=True)
     else:
         print('hahahaha dataset is unknown')
 
@@ -214,7 +253,7 @@ if __name__ == '__main__':
         real_imgs = Variable(imgs.type(Tensor))
 
         #encoded message
-        u = torch.randint(0, 2, (args.batch_size, args.block_len, 1, 1), dtype=torch.float).to(device)
+        u = torch.randint(0, 2, (args.batch_size, args.block_len), dtype=torch.float).to(device)
         #x = torch.zeros(args.img_size)
         #u = torch.add(u,1,x)
         #u = u.unsqueeze_(-1)

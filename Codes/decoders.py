@@ -315,3 +315,57 @@ class Hidden_Decoder_4(nn.Module):
         out = out.contiguous()
         out = self.sigmoid(out)
         return out
+    
+class Hidden_Decoder_5(nn.Module):
+    def __init__(self, args):
+        super(Hidden_Decoder_5, self).__init__()
+        
+        self.args = args
+        
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+        
+        def block(in_filters,out_filters,normalize=True):
+            block = [ nn.Conv2d(in_filters,out_filters,3,stride=1,padding=1)]
+            if normalize:
+                block.append(nn.BatchNorm2d(out_filters, 0.8))
+            block.append(nn.LeakyReLU(0.2, inplace=True))
+            return block
+        
+        def conv_2d_block(in_feat,out_feat,normalize=True):
+            block = [nn.ConvTranspose2d(in_feat,out_feat,3,stride=1,padding=1)]
+            if normalize:
+                block.append(nn.BatchNorm2d(out_feat, 0.8))
+            block.append(nn.LeakyReLU(0.2, inplace=True))
+            return block
+        
+        self.model = nn.Sequential(
+                *block(self.args.img_channel,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,1))
+        
+        self.conv1 = nn.Sequential(
+                *conv_2d_block(4,4),
+                *conv_2d_block(4,2),
+                *conv_2d_block(2,1))
+        
+        self.sigmoid = nn.Sequential(nn.Sigmoid())
+        
+    def forward(self,img):
+        out = self.model(img) #64,1,32,32
+        out = out.view(self.args.batch_size,4,int(self.args.block_len**0.5),int(self.args.block_len**2))#64,4,(16*16)
+        #out = out.permute(2,1,0)#(32*32),3,64
+        
+        out = self.conv1(out)#64,1,4
+        #out = out.permute(2,1,0)#64,1,(32*32)
+        out = out.view(self.args.batch_size,-1)#64,4
+        out = out.contiguous()
+        out = self.sigmoid(out)
+        return out
+    
+
+if __name__ == '__main__':
+    print('Decoders initialized')
