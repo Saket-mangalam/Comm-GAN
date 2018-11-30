@@ -9,6 +9,7 @@ import numpy as np
 import os
 import torch
 from get_args import get_args
+import csv
 
 from utils import channel, errors_ber, weights_init_normal
 
@@ -27,9 +28,12 @@ if __name__ == '__main__':
     print('[ID]', identity)
 
     args = get_args()
-
+    #directory for saving images
     os.makedirs('images', exist_ok=True)
     os.makedirs('images/'+identity, exist_ok=True)
+    #directory for saving loss log
+    os.makedirs('logbook', exist_ok=True)
+    #os.makedirs('logbook/'+identity, exist_ok=True)
 
     img_shape = (args.img_channel, args.img_size, args.img_size)
     cuda = True if torch.cuda.is_available() else False
@@ -44,13 +48,13 @@ if __name__ == '__main__':
     # Setup GAN structures: TBD: select the right G,D and Dec
     ########################################################
 
-    if args.g_type == 'hidden4':
-        from generators import Hidden_Generator_4 as Generator
+    if args.g_type == 'hidden5':
+        from generators import Hidden_Generator_5 as Generator
     else:
         from generators import FCNN_Generator as Generator
 
-    if args.dec_type == 'hidden4':
-        from decoders import Hidden_Decoder_4 as Decoder
+    if args.dec_type == 'hidden5':
+        from decoders import Hidden_Decoder_5 as Decoder
     else:
         from decoders import gridrnn_Decoder as Decoder
 
@@ -147,95 +151,102 @@ if __name__ == '__main__':
     
     #initialize tensor
     Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
-    this_ber = 1
+    d_loss = 1
     epoch = 0
     # ----------
     #  Training
     # ----------
-
-    while this_ber!=0:
-        epoch+=1
-        for i, (imgs, _) in enumerate(train_dataloader):
-
-            # Adversarial ground truths
-            #print(imgs.shape)
-            valid = Variable(Tensor(imgs.shape[0], 1).fill_(1.0), requires_grad=False)
-            fake = Variable(Tensor(imgs.shape[0], 1).fill_(0.0), requires_grad=False)
-
-            if valid.shape[0]!=args.batch_size:
-                continue
-            
-            # Configure input
-            real_imgs = Variable(imgs.type(Tensor))
-            #encoded message
-            u = torch.randint(0, 2, (args.batch_size, args.block_len), dtype=torch.float).to(device)
-            
-            #print(encodable_u.shape)
-            
-            '''where do i put this initialization'''
-            optimizer_G.zero_grad()
-            optimizer_D.zero_grad()
-            optimizer_Dec.zero_grad()
-            
-            # -----------------
-            #  Train G
-            # -----------------
-            for idx in range(args.num_train_G):
+    with open('logbook/'+identity+'.csv', 'w') as csvfile:
+        filewriter = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        for epoch in range(args.num_epoch):
+            for i, (imgs, _) in enumerate(train_dataloader):
+    
+                # Adversarial ground truths
+                #print(imgs.shape)
+                valid = Variable(Tensor(imgs.shape[0], 1).fill_(1.0), requires_grad=False)
+                fake = Variable(Tensor(imgs.shape[0], 1).fill_(0.0), requires_grad=False)
+    
+                if valid.shape[0]!=args.batch_size:
+                    continue
                 
+                # Configure input
+                real_imgs = Variable(imgs.type(Tensor))
+                #encoded message
+                u = torch.randint(0, 2, (args.batch_size, args.block_len), dtype=torch.float).to(device)
                 
-                # Generate a batch of images
-                gen_imgs = generator(real_imgs, u)
-                # Loss measures generator's ability to fool the discriminator
-                #received_imgs = channel(gen_imgs, args.noise_std, channel_type = args.channel_type, device = device)
+                #print(encodable_u.shape)
                 
-                #for every iteration of G train discriminator n times
-                for i in range(args.num_train_D):
+                '''where do i put this initialization'''
+                optimizer_G.zero_grad()
+                optimizer_D.zero_grad()
+                optimizer_Dec.zero_grad()
+                
+                # -----------------
+                #  Train G
+                # -----------------
+                for idx in range(args.num_train_G):
                     
-                    # Discriminate real or fake
-                    valid_gen = discriminator(real_imgs)
-                    fake_gen = discriminator(gen_imgs)
-                    #train discriminator only
-                    real_loss = BCELoss(valid_gen,valid)
-                    fake_loss = BCELoss(fake_gen, fake)
-                    d_loss = (real_loss + fake_loss) / 2
-                    d_loss.backward(retain_graph=True)
-                    optimizer_D.step()
                     
-                #for every iteration of G train Dec n times
-                for j in range(args.num_train_Dec):
+                    # Generate a batch of images
+                    gen_imgs = generator(real_imgs, u)
+                    # Loss measures generator's ability to fool the discriminator
+                    gen_imgs = channel(gen_imgs, args.noise_std, channel_type = args.channel_type, device = device)
                     
-                    # Decode it
-                    decoded_info = decoder(gen_imgs)
-                    # train decoder only
-                    dec_loss =  BCELoss(decoded_info, u)
-                    dec_loss.backward(retain_graph=True)
-                    optimizer_Dec.step()
+                    #for every iteration of G train discriminator n times
+                    for k in range(args.num_train_D):
+                        
+                        # Discriminate real or fake
+                        valid_gen = discriminator(real_imgs)
+                        fake_gen = discriminator(gen_imgs)
+                        #train discriminator only
+                        real_loss = BCELoss(valid_gen,valid)
+                        fake_loss = BCELoss(fake_gen, fake)
+                        d_loss = (real_loss + fake_loss) / 2
+                        d_loss.backward(retain_graph=True)
+                        optimizer_D.step()
+                        
+                    #for every iteration of G train Dec n times
+                    for j in range(args.num_train_Dec):
+                        
+                        # Decode it
+                        decoded_info = decoder(gen_imgs)
+                        # train decoder only
+                        dec_loss =  BCELoss(decoded_info, u)
+                        dec_loss.backward(retain_graph=True)
+                        optimizer_Dec.step()
+                        
                     
-                
-                #train generator
-                g_loss = (1.0 - args.lambda_I - args.lambda_G)*BCELoss(decoded_info,u) + \
-                                args.lambda_I * MSELoss(gen_imgs,real_imgs) + \
-                                args.lambda_G *((BCELoss(discriminator(gen_imgs), fake) + BCELoss(discriminator(real_imgs),valid))/2)
-                                
-                g_loss.backward(retain_graph=True)
-                optimizer_G.step()
-                
-            
-            if i%100 == 0:
+                    #train generator
+                    g_loss = (1.0 - args.lambda_I - args.lambda_G)*BCELoss(decoded_info,u) + \
+                                    args.lambda_I * MSELoss(gen_imgs,real_imgs) + \
+                                    args.lambda_G *((BCELoss(discriminator(gen_imgs), fake) + BCELoss(discriminator(real_imgs),valid))/2)
+                                    
+                    g_loss.backward(retain_graph=True)
+                    optimizer_G.step()
+                    
+                #calculate ber loss
                 decoded_info = decoded_info.detach()
                 u            = u.detach()
                 this_ber = errors_ber(decoded_info, u)
-                print ("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [batch Dec BER: %f]" % (epoch, args.num_epoch, i, len(train_dataloader),
-                                                                    d_loss.item(), g_loss.item(), this_ber))
                 
+                if i%100 == 0:
+                    
+                    print ("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [batch Dec BER: %f]" % (epoch, args.num_epoch, i, len(train_dataloader),
+                                                                        d_loss.item(), g_loss.item(), this_ber))
                 
-            batches_done = epoch * len(train_dataloader) + i
-            if batches_done % args.sample_interval == 0:
-                save_image(gen_imgs.data[:25], 'images/'+identity+'/%d.png' % batches_done, nrow=5, normalize=True)
+                batches_done = epoch * len(train_dataloader) + i
+                #saving log
+                if batches_done == 0:
+                    filewriter.writerow(['Batchnumber','D loss','Dec loss','G loss','ber loss'])
+                    filewriter.writerow([batches_done,d_loss.item(),dec_loss.item(),g_loss.item(),this_ber])
+                else:
+                    filewriter.writerow([batches_done,d_loss.item(),dec_loss.item(),g_loss.item(),this_ber])
+                    
                 
-        if(args.num_epoch<epoch):
-            break
-        
+                if batches_done % args.sample_interval == 0:
+                    save_image(gen_imgs.data[:25], 'images/'+identity+'/%d.png' % batches_done, nrow=5, normalize=True)
+                    
+            
             
     # --------------------------
     #  Testing: only for BER
@@ -257,14 +268,14 @@ if __name__ == '__main__':
         #x = torch.zeros(args.img_size)
         #u = torch.add(u,1,x)
         #u = u.unsqueeze_(-1)
-        encodable_u = u.expand(args.batch_size,args.block_len,args.img_size,args.img_size)
-        print(u.shape)
+        #encodable_u = u.expand(args.batch_size,args.block_len,args.img_size,args.img_size)
+        #print(u.shape)
 
         # Generate a batch of images
-        gen_imgs = generator(real_imgs, encodable_u)
+        gen_imgs = generator(real_imgs, u)
 
         # Loss measures generator's ability to fool the discriminator
-        #received_imgs = channel(gen_imgs, args.noise_std, channel_type = args.channel_type, device = device)
+        gen_imgs = channel(gen_imgs, args.noise_std, channel_type = args.channel_type, device = device)
 
         decoded_info = decoder(gen_imgs)
 
