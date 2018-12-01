@@ -50,11 +50,27 @@ if __name__ == '__main__':
 
     if args.g_type == 'hidden5':
         from generators import Hidden_Generator_5 as Generator
+    elif args.g_type == 'hidden4':
+        from generators import Hidden_Genarator_4 as Generator
+    elif args.g_type == 'hidden3':
+        from generators import Hidden_Genarator_3 as Generator
+    elif args.g_type == 'hidden2':
+        from generators import Hidden_Genarator_2 as Generator
+    elif args.g_type == 'hidden1':
+        from generators import Hidden_Genarator_1 as Generator
     else:
         from generators import FCNN_Generator as Generator
 
     if args.dec_type == 'hidden5':
         from decoders import Hidden_Decoder_5 as Decoder
+    elif args.dec_type == 'hidden4':
+        from decoders import Hidden_Decoder_4 as Decoder
+    elif args.dec_type == 'hidden3':
+        from decoders import Hidden_Decoder_3 as Decoder
+    elif args.dec_type == 'hidden2':
+        from decoders import Hidden_Decoder_2 as Decoder
+    elif args.dec_type == 'hidden1':
+        from decoders import Hidden_Decoder_1 as Decoder
     else:
         from decoders import gridrnn_Decoder as Decoder
 
@@ -238,9 +254,9 @@ if __name__ == '__main__':
                 #saving log
                 if batches_done == 0:
                     filewriter.writerow(['Batchnumber','D loss','Dec loss','G loss','ber loss'])
-                    filewriter.writerow([batches_done,d_loss.item(),dec_loss.item(),g_loss.item(),this_ber])
+                    filewriter.writerow([batches_done,d_loss.item(),dec_loss.item(),g_loss.item(),this_ber.item()])
                 else:
-                    filewriter.writerow([batches_done,d_loss.item(),dec_loss.item(),g_loss.item(),this_ber])
+                    filewriter.writerow([batches_done,d_loss.item(),dec_loss.item(),g_loss.item(),this_ber.item()])
                     
                 
                 if batches_done % args.sample_interval == 0:
