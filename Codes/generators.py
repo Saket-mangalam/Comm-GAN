@@ -390,8 +390,8 @@ class Hidden_Generator_3(nn.Module):
         
         self.conv1d_block = nn.Sequential(
                 *c_block(1,3),
-                *c_block(3,3),
-                *c_block(3,3))
+                *c_block(3,6),
+                *c_block(6,12))
         
         self.conv_block_1 = nn.Sequential(
                 *block(self.args.img_channel,64),
@@ -455,9 +455,9 @@ class Hidden_Generator_4(nn.Module):
             return layers
         
         self.conv1d_block = nn.Sequential(
-                *c_block(1,16),
-                *c_block(16,32),
-                *c_block(32,64))
+                *c_block(1,2),
+                *c_block(2,4),
+                *c_block(4,4))
         
         self.conv_block_1 = nn.Sequential(
                 *block(self.args.img_channel,64),
@@ -545,5 +545,195 @@ class Hidden_Generator_5(nn.Module):
         enc = self.conv_block_2(enc)
         return enc
     
+
+
+class Hidden_Generator_6(nn.Module):
+    def __init__(self, args):
+        super(Hidden_Generator_6, self).__init__()
+
+        self.args      = args
+        #self.img_shape = (args.img_channel, args.img_size, args.img_size)
+
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+
+
+        
+        def block(in_feat, out_feat, normalize=True):
+            layers = [  nn.Conv2d(in_feat, out_feat, 3, stride = 1, padding = 1)]
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        def c_block(in_feat, out_feat, normalize=True):
+            layers = [ nn.Conv2d(in_feat,out_feat,3,stride = 1, padding = 1)]
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.ELU(0.8, inplace=True))
+            return layers
+        
+        def down_block(in_feat,out_feat,normalize=True):
+            block = [nn.Linear(in_feat,out_feat)]
+            if normalize:
+                block.append(nn.BatchNorm1d(out_feat, 0.8))
+            block.append(nn.LeakyReLU(0.2,inplace=True))
+            return block
+        
+        def up_block(in_feat, out_feat, normalize=True):
+            block = [nn.ConvTranspose2d(in_feat,out_feat,3,stride=1,padding=1)]
+            if normalize:
+                block.append(nn.BatchNorm2d(out_feat, 0.8))
+            block.append(nn.LeakyReLU(0.2, inplace=True))
+            return block
+        
+        
+        self.linear_1 = nn.Sequential(
+                *down_block(self.args.block_len,512),
+                *down_block(512,int((self.args.img_size**2)/4)))
+        
+        self.linear_2 = nn.Sequential(
+                *down_block(self.args.sample_noise,512),
+                *down_block(512,int((self.args.img_size**2)/4)))
+        
+        self.conv2d_block = nn.Sequential(
+                *c_block(1,2),
+                *c_block(2,4),
+                *c_block(4,4))
+        
+        self.conv_block_1 = nn.Sequential(
+                *block(self.args.img_channel,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64)
+                )
+        
+        
+        self.conv_block_2 = nn.Sequential(
+                *block((65+self.args.img_channel),64),
+                nn.Conv2d(64, self.args.img_channel, 1, stride = 1, padding = 0),
+                nn.BatchNorm2d(self.args.img_channel, 0.8)
+                )
+        
+        self.transformed = nn.Sequential(
+                *up_block(1,16),
+                *up_block(16,32),
+                *up_block(32,64),
+                *up_block(64,4*self.args.img_channel))
+        
+    def forward(self,z,u):
+        #z is the awgn, u is message
+        #Transform z to image first
+        z = self.linear_2(z)
+        z = z.view(self.args.batch_size,1,int(self.args.img_size/2),int(self.args.img_size/2))
+        #tranform it in an image shape
+        z = self.transformed(z)
+        z = z.view(self.args.batch_size,self.args.img_channel,self.args.img_size,self.args.img_size)
+        encready_z = self.conv_block_1(z)
+        # u is of size 64,x^2
+        u = self.linear_1(u)
+        u = u.view(self.args.batch_size,1,int(self.args.img_size/2),int(self.args.img_size/2)) # 64,1,x,x
+        u = self.conv2d_block(u)
+        #u = u.view(self.args.batch_size,-1) # 64,1024
+        u = u.view(self.args.batch_size,1,self.args.img_size,self.args.img_size)#64,1,32,32
+        enc = torch.cat([u,encready_z,z],dim=1)
+        enc = self.conv_block_2(enc)
+        return enc
+
+class Hidden_Generator_7(nn.Module):
+    def __init__(self, args):
+        super(Hidden_Generator_7, self).__init__()
+
+        self.args      = args
+        #self.img_shape = (args.img_channel, args.img_size, args.img_size)
+
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+
+
+        
+        def block(in_feat, out_feat, normalize=True):
+            layers = [  nn.Conv2d(in_feat, out_feat, 3, stride = 1, padding = 1)]
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        def c_block(in_feat, out_feat, normalize=True):
+            layers = [ nn.Conv2d(in_feat,out_feat,3,stride = 1, padding = 1)]
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.ELU(0.8, inplace=True))
+            return layers
+        
+        def down_block(in_feat,out_feat,normalize=True):
+            block = [nn.Linear(in_feat,out_feat)]
+            if normalize:
+                block.append(nn.BatchNorm1d(out_feat, 0.8))
+            block.append(nn.LeakyReLU(0.2,inplace=True))
+            return block
+        
+        def up_block(in_feat, out_feat, normalize=True):
+            block = [nn.Upsample(scale_factor=2,mode='bilinear')]
+            block.append(nn.Conv2d(in_feat,out_feat,3,stride=1,padding=1))
+            if normalize:
+                block.append(nn.BatchNorm2d(out_feat, 0.8))
+            block.append(nn.LeakyReLU(0.2, inplace=True))
+            return block
+        
+        
+        self.linear = nn.Sequential(
+                *down_block(self.args.block_len,512),
+                *down_block(512,int((self.args.img_size**2)/4)))
+        
+        
+        self.conv2d_block = nn.Sequential(
+                *c_block(1,2),
+                *c_block(2,4),
+                *c_block(4,4))
+        
+        self.conv_block_1 = nn.Sequential(
+                *block(self.args.img_channel,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64)
+                )
+        
+        
+        self.conv_block_2 = nn.Sequential(
+                *block((65+self.args.img_channel),64),
+                nn.Conv2d(64, self.args.img_channel, 1, stride = 1, padding = 0),
+                nn.BatchNorm2d(self.args.img_channel, 0.8)
+                )
+        
+        self.transformed = nn.Sequential(
+                *up_block(self.args.sample_noise,64), #2x2
+                *up_block(64,128), #4x4
+                *up_block(128,256), #8x8
+                *up_block(256,128), #16x16
+                *up_block(128,64), #32x32
+                *block(64,self.args.img_channel)
+                )
+        
+    def forward(self,z,u):
+        #z is the awgn, u is message
+        #Transform z to image first
+        z = z.view(self.args.batch_size,self.args.sample_noise,1,1)
+        
+        #tranform it in an image shape
+        z = self.transformed(z)
+        #z = z.view(self.args.batch_size,self.args.img_channel,self.args.img_size,self.args.img_size)
+        encready_z = self.conv_block_1(z)
+        # u is of size 64,x^2
+        u = self.linear(u)
+        u = u.view(self.args.batch_size,1,int(self.args.img_size/2),int(self.args.img_size/2)) # 64,1,x,x
+        u = self.conv2d_block(u)
+        #u = u.view(self.args.batch_size,-1) # 64,1024
+        u = u.view(self.args.batch_size,1,self.args.img_size,self.args.img_size)#64,1,32,32
+        enc = torch.cat([u,encready_z,z],dim=1)
+        enc = self.conv_block_2(enc)
+        return enc
+
+
 if __name__ == '__main__':
     print('Generators initialized')

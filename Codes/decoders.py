@@ -246,25 +246,23 @@ class Hidden_Decoder_3(nn.Module):
                 *block(64,3))
         
         self.conv1 = nn.Sequential(
-                *conv_1d_block(3,3),
-                *conv_1d_block(3,3),
+                *conv_1d_block(12,6),
+                *conv_1d_block(6,3),
                 *conv_1d_block(3,1))
         
-        self.pool = nn.Sequential(nn.AvgPool3d(kernel_size = (1,self.args.img_size,self.args.img_size), stride = 1, padding=0),
-                                  nn.Sigmoid())
+        self.pool = nn.Sequential(nn.Sigmoid())
         
     def forward(self,img):
         out = self.model(img) #64,3,32,32
-        out = out.view(self.args.batch_size,3,-1)#64,3,(32*32)
+        out = out.view(self.args.batch_size,12,-1)#64,3,(32*32)
         #out = out.permute(2,1,0)#(32*32),3,64
         out = self.conv1(out)#64,1,32*32
         #out = out.permute(2,1,0)#64,1,(32*32)
         out = out.view(self.args.batch_size,-1)#64,(32*32)
-        out = out.contiguous()
+        out = self.pool(out)
         
         return out
     
-        
     
 class Hidden_Decoder_4(nn.Module):
     def __init__(self, args):
@@ -298,15 +296,15 @@ class Hidden_Decoder_4(nn.Module):
                 *block(64,1))
         
         self.conv1 = nn.Sequential(
-                *conv_1d_block(256,128),
-                *conv_1d_block(128,64),
-                *conv_1d_block(64,1))
+                *conv_1d_block(4,4),
+                *conv_1d_block(4,2),
+                *conv_1d_block(2,1))
         
         self.sigmoid = nn.Sequential(nn.Sigmoid())
         
     def forward(self,img):
         out = self.model(img) #64,1,32,32
-        out = out.view(self.args.batch_size,256,-1)#64,3,(32*32)
+        out = out.view(self.args.batch_size,4,-1)#64,3,(32*32)
         #out = out.permute(2,1,0)#(32*32),3,64
         
         out = self.conv1(out)#64,1,4
@@ -356,7 +354,7 @@ class Hidden_Decoder_5(nn.Module):
         
     def forward(self,img):
         out = self.model(img) #64,1,32,32
-        out = out.view(self.args.batch_size,4,int(self.args.block_len**0.5),int(self.args.block_len**2))#64,4,(16*16)
+        out = out.view(self.args.batch_size,4,int(self.args.block_len**0.5),int(self.args.block_len**0.5))#64,4,(16*16)
         #out = out.permute(2,1,0)#(32*32),3,64
         
         out = self.conv1(out)#64,1,4
@@ -366,6 +364,69 @@ class Hidden_Decoder_5(nn.Module):
         out = self.sigmoid(out)
         return out
     
-
+class Hidden_Decoder_6(nn.Module):
+    def __init__(self, args):
+        super(Hidden_Decoder_6, self).__init__()
+        
+        self.args = args
+        
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+        
+        def block(in_filters,out_filters,normalize=True):
+            block = [ nn.Conv2d(in_filters,out_filters,3,stride=1,padding=1)]
+            if normalize:
+                block.append(nn.BatchNorm2d(out_filters, 0.8))
+            block.append(nn.LeakyReLU(0.2, inplace=True))
+            return block
+        
+        def down_block(in_feat,out_feat,normalize=True):
+            block = [nn.Linear(in_feat,out_feat)]
+            if normalize:
+                block.append(nn.BatchNorm1d(out_feat, 0.8))
+            block.append(nn.LeakyReLU(0.2,inplace=True))
+            return block
+        
+        def conv_2d_block(in_feat,out_feat,normalize=True):
+            block = [nn.ConvTranspose2d(in_feat,out_feat,3,stride=1,padding=1)]
+            if normalize:
+                block.append(nn.BatchNorm2d(out_feat, 0.8))
+            block.append(nn.LeakyReLU(0.2, inplace=True))
+            return block
+        
+        self.model = nn.Sequential(
+                *block(self.args.img_channel,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,64),
+                *block(64,1))
+        
+        self.conv1 = nn.Sequential(
+                *conv_2d_block(4,4),
+                *conv_2d_block(4,2),
+                *conv_2d_block(2,1))
+        
+        self.linear = nn.Sequential(
+                *down_block(int((self.args.img_size**2)/4),512),
+                *down_block(512,self.args.block_len))
+        
+        self.sigmoid = nn.Sequential(nn.Sigmoid())
+        
+    def forward(self,img):
+        out = self.model(img) #64,1,32,32
+        out = out.view(self.args.batch_size,4,int(self.args.img_size/2),int(self.args.img_size/2))#64,4,(16*16)
+        #out = out.permute(2,1,0)#(32*32),3,64
+        
+        out = self.conv1(out)#64,1,4
+        #out = out.permute(2,1,0)#64,1,(32*32)
+        out = out.view(self.args.batch_size,-1)#64,4
+        out = self.linear(out)
+        out = out.contiguous()
+        out = self.sigmoid(out)
+        return out
+    
+        
+        
 if __name__ == '__main__':
     print('Decoders initialized')

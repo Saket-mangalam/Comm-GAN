@@ -47,21 +47,26 @@ if __name__ == '__main__':
     ########################################################
     # Setup GAN structures: TBD: select the right G,D and Dec
     ########################################################
-
-    if args.g_type == 'hidden5':
+    if args.g_type == 'hidden7':
+        from generators import Hidden_Generator_7 as Generator
+    elif args.g_type == 'hidden6':
+        from generators import Hidden_Generator_6 as Generator
+    elif args.g_type == 'hidden5':
         from generators import Hidden_Generator_5 as Generator
     elif args.g_type == 'hidden4':
-        from generators import Hidden_Genarator_4 as Generator
+        from generators import Hidden_Generator_4 as Generator
     elif args.g_type == 'hidden3':
-        from generators import Hidden_Genarator_3 as Generator
+        from generators import Hidden_Generator_3 as Generator
     elif args.g_type == 'hidden2':
-        from generators import Hidden_Genarator_2 as Generator
+        from generators import Hidden_Generator_2 as Generator
     elif args.g_type == 'hidden1':
-        from generators import Hidden_Genarator_1 as Generator
+        from generators import Hidden_Generator_1 as Generator
     else:
         from generators import FCNN_Generator as Generator
 
-    if args.dec_type == 'hidden5':
+    if args.dec_type == 'hidden6' or args.dec_type == 'hidden7':
+        from decoders import Hidden_Decoder_6 as Decoder
+    elif args.dec_type == 'hidden5':
         from decoders import Hidden_Decoder_5 as Decoder
     elif args.dec_type == 'hidden4':
         from decoders import Hidden_Decoder_4 as Decoder
@@ -136,7 +141,27 @@ if __name__ == '__main__':
                                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
                            ])),
             batch_size=args.batch_size, shuffle=True)
-
+    
+    elif args.dataset == 'fmnist':
+            os.makedirs('./data/fmnist', exist_ok=True)
+            train_dataloader = torch.utils.data.DataLoader(
+                datasets.FashionMNIST('./data/fmnist', train=True, download=True,
+                               transform=transforms.Compose([
+                                   transforms.Resize(args.img_size),
+                                   transforms.ToTensor(),
+                                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                               ])),
+                batch_size=args.batch_size, shuffle=True)
+    
+            test_dataloader = torch.utils.data.DataLoader(
+                datasets.FashionMNIST('./data/fmnist', train=False, download=True,
+                               transform=transforms.Compose([
+                                   transforms.Resize(args.img_size),
+                                   transforms.ToTensor(),
+                                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                               ])),
+                batch_size=args.batch_size, shuffle=True)
+        
     elif args.dataset == 'cifar10':
         os.makedirs('./data/cifar10', exist_ok=True)
         train_dataloader = torch.utils.data.DataLoader(
@@ -186,6 +211,13 @@ if __name__ == '__main__':
                     continue
                 
                 # Configure input
+                if args.gan_type == 'mine':    
+                    real_noise = torch.randint(0,2,(args.batch_size, args.img_channel, args.img_size, args.img_size),dtype=torch.float).to(device)
+                if args.g_type == 'hidden6' or args.g_type == 'hidden7':
+                    real_noise = 0.8 * torch.randn((args.batch_size,args.sample_noise), dtype=torch.float).to(device)
+                    #real_noise = torch.randint(0,2,(args.batch_size, args.sample_noise),dtype=torch.float).to(device)
+                
+                
                 real_imgs = Variable(imgs.type(Tensor))
                 #encoded message
                 u = torch.randint(0, 2, (args.batch_size, args.block_len), dtype=torch.float).to(device)
@@ -204,7 +236,11 @@ if __name__ == '__main__':
                     
                     
                     # Generate a batch of images
-                    gen_imgs = generator(real_imgs, u)
+                    if args.gan_type == 'mine':
+                        gen_imgs = generator(real_noise, u)
+                    else:
+                        gen_imgs = generator(real_imgs,u)
+                    #gen_imgs = generator(real_imgs, u)
                     # Loss measures generator's ability to fool the discriminator
                     gen_imgs = channel(gen_imgs, args.noise_std, channel_type = args.channel_type, device = device)
                     
