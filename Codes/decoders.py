@@ -426,7 +426,54 @@ class Hidden_Decoder_6(nn.Module):
         out = self.sigmoid(out)
         return out
     
+
+class Enc_Decoder(nn.Module):
+    def __init__(self, args):
+        super(Enc_Decoder, self).__init__()
         
+        self.args = args
+        
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+                
+        def block(in_filters,out_filters,normalize=True,kernel_size=5,pad=2):
+            block = [ nn.Conv2d(in_filters,out_filters,kernel_size,stride=1,padding=pad)]
+            if normalize:
+                block.append(nn.BatchNorm2d(out_filters, 0.8))
+            block.append(nn.LeakyReLU(0.2, inplace=True))
+            return block
+        
+        def down_conv_block(in_feat, out_feat, normalize=True, kernel_size = 5, pad = 2):
+            layers = [nn.MaxPool2d(kernel_size=2)]
+            layers.append(nn.Conv2d(in_feat, out_feat, kernel_size, stride = 1, padding = pad))
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        self.conv1 = nn.Sequential(
+                *block(self.args.img_channel,32),
+                *block(32,64),
+                *block(64,32),
+                *block(32,1))
+        
+        self.conv2 = nn.Sequential(
+                *down_conv_block(1,4),
+                *down_conv_block(4,8),
+                *down_conv_block(8,16))
+        
+        self.sigmoid = nn.Sequential(nn.Sigmoid())
+        
+    def forward(self,z):
+        #z is an image size 64x3x32x32
+        # change z to 1 channel using conv2d
+        z = self.conv1(z)
+        #down sample it to 64x16x4x4
+        z = self.conv2(z)
+        # flatten it
+        z = z.view(self.args.batch_size,-1)
+        z = self.sigmoid(z)
+        return z
         
 if __name__ == '__main__':
     print('Decoders initialized')

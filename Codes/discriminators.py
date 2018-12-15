@@ -79,4 +79,76 @@ class Hidden_discriminator(nn.Module):
         validity = conv
         return validity
     
+class Gan_Discriminator(nn.Module):
+    def __init__(self,args):
+        super(Gan_Discriminator,self).__init__()
         
+        self.args = args
+        
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+        
+        def block(in_feat, out_feat, pool = True, normalize= True, kernel_size=5,pad=2):
+            layers = [nn.Conv2d(in_feat,out_feat,kernel_size,stride=1,padding=pad)]
+            if pool:
+                layers.append(nn.MaxPool2d(2))
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        self.conv = nn.Sequential(
+                *block(self.args.img_channel,64),
+                *block(64,128),
+                *block(128,256),
+                *block(256,512))
+        
+        self.adv_layer = nn.Sequential( nn.Linear(2048, 1),
+                                        nn.Sigmoid())
+        
+    def forward(self,z):
+        #z is a image of size 64x3x32x32
+        # convolve z till 64x512x2x2
+        z = self.conv(z)
+        #change shape to 64x2048
+        z = z.view(self.args.batch_size,-1)
+        #finally make 64x1
+        z = self.adv_layer(z)
+        return z
+    
+class Enc_Discriminator(nn.Module):
+    def __init__(self,args):
+        super(Enc_Discriminator,self).__init__()
+        
+        self.args = args
+        
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+        
+        def block(in_feat, out_feat, pool = True, normalize= True, kernel_size=5,pad=2):
+            layers = [nn.Conv2d(in_feat,out_feat,kernel_size,stride=1,padding=pad)]
+            if pool:
+                layers.append(nn.MaxPool2d(2))
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        self.conv = nn.Sequential(
+                *block(self.args.img_channel,64),
+                *block(64,128),
+                *block(128,256),
+                *block(256,512))
+        
+        self.adv_layer = nn.Sequential( nn.Linear(2048, 1),
+                                        nn.Sigmoid())
+        
+    def forward(self,z):
+        #z is a image of size 64x3x32x32
+        # convolve z till 64x512x2x2
+        z = self.conv(z)
+        #change shape to 64x2048
+        z = z.view(self.args.batch_size,-1)
+        #finally make 64x1
+        z = self.adv_layer(z)
+        return z

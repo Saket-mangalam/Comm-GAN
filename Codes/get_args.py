@@ -36,8 +36,8 @@ def get_args():
 
     parser.add_argument('-n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
     
-    parser.add_argument('-lambda_I' , type=float, default=0.001, help='relative weight of image distortion loss(Hidden)')
-    parser.add_argument('-lambda_G' , type=float, default=0.001, help='relative weight of adversarial loss, the ability of the discriminator to detect an encoded image')
+    parser.add_argument('-lambda_I' , type=float, default=0.1, help='relative weight of image distortion loss(Hidden)')
+    parser.add_argument('-lambda_G' , type=float, default=0.1, help='relative weight of adversarial loss, the ability of the discriminator to detect an encoded image')
     
     # For Mnist, use (32,32) with 1 channel.
     parser.add_argument('-latent_dim', type=int, default=10, help='dimensionality of the latent space')

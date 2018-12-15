@@ -734,6 +734,107 @@ class Hidden_Generator_7(nn.Module):
         enc = self.conv_block_2(enc)
         return enc
 
+class Gan_Generator(nn.Module):
+    def __init__(self, args):
+        super(Gan_Generator, self).__init__()
+
+        self.args      = args
+        #self.img_shape = (args.img_channel, args.img_size, args.img_size)
+
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+
+        
+        def conv_block(in_feat, out_feat, normalize=True, kernel = 5, pad = 2):
+            layers = [nn.Upsample(scale_factor=2,mode='bilinear')]
+            layers.append(nn.Conv2d(in_feat, out_feat, kernel, stride = 1, padding = pad))
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        def lin_block(in_feat, out_feat, normalize=True):
+            layers = [nn.Linear(in_feat,out_feat,bias=False)]
+            if normalize:
+                layers.append(nn.BatchNorm1d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2,inplace=True))
+            return layers
+        
+        self.linear = nn.Sequential(
+                *lin_block(self.args.sample_noise, 512),
+                *lin_block(512,1024),
+                *lin_block(1024,2048))
+        
+        self.conv = nn.Sequential(
+                *conv_block(512,256),
+                *conv_block(256,128),
+                *conv_block(128,64),
+                *conv_block(64,3))
+        
+        self.tanh = nn.Sequential(nn.Tanh())
+        
+    def forward(self,z):
+        #z is awgn dim- batchsizexnoisesize(100)
+        #convert z from 100 to 2048
+        z = self.linear(z)
+        # change the shape to 64x512x2x2
+        z = z.view(self.args.batch_size,512,2,2)
+        # upgrade and upsample using convolutions to 64x3x32x32
+        z = self.conv(z)
+        z = self.tanh(z)
+        return z
+    
+class Enc_Generator(nn.Module):
+    def __init__(self, args):
+        super(Enc_Generator, self).__init__()
+
+        self.args      = args
+        #self.img_shape = (args.img_channel, args.img_size, args.img_size)
+
+        cuda = True if torch.cuda.is_available() else False
+        self.this_device = torch.device("cuda" if cuda else "cpu")
+
+        
+        def up_conv_block(in_feat, out_feat, normalize=True, kernel = 5, pad = 2):
+            layers =  [nn.Upsample(scale_factor=2,mode='bilinear')]
+            layers.append(nn.Conv2d(in_feat, out_feat, kernel, stride = 1, padding = pad))
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        def conv_block(in_feat, out_feat, normalize=True, kernel_size = 5, pad = 2):
+            layers = [nn.Conv2d(in_feat, out_feat, kernel_size, stride = 1, padding = pad)]
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        self.conv1 = nn.Sequential(
+                *up_conv_block(16,8),
+                *up_conv_block(8,4),
+                *up_conv_block(4,1))
+        
+        self.conv2 = nn.Sequential(
+                *conv_block(self.args.img_channel+1,32),
+                *conv_block(32,64),
+                *conv_block(64,32),
+                *conv_block(32,self.args.img_channel))
+        
+        self.tanh = nn.Sequential(nn.Tanh())
+        
+    def forward(self,z,u):
+        #z is image shape 64x3x32x32 u is message shape 64x256
+        #convert u to be 64x16x4x4
+        u = u.view(self.args.batch_size,16,4,4)
+        # upsample and convolve to 64x1x32x32
+        u = F.sigmoid(self.conv1(u))
+        # add it to image
+        z = torch.cat([z,u],dim=1)
+        #convolve the image to be final 64x3x32x32
+        z = self.conv2(z)
+        z = self.tanh(z)
+        return z
 
 if __name__ == '__main__':
     print('Generators initialized')
