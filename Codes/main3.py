@@ -9,13 +9,14 @@ from __future__ import print_function
 #%matplotlib inline
 #import argparse
 import os
-#import random
+import random
 import torch
 #import torch.nn as nn
 import torch.nn.parallel
-#import torch.backends.cudnn as cudnn
+import torch.backends.cudnn as cudnn
 #import torch.optim as optim
 import torch.utils.data
+#import torch.nn.init.xavier_uniform as initialize 
 #import torchvision.datasets as dset
 import torchvision.transforms as transforms
 #import torchvision.utils as vutils
@@ -30,6 +31,10 @@ from get_args import get_args
 import csv
 
 from utils import channel, errors_ber, weights_init_normal
+random.seed(999)
+torch.manual_seed(999)
+
+cudnn.benchmark = True
 
 #import torchvision.transforms as transforms
 from torchvision.utils import save_image
@@ -86,13 +91,13 @@ if __name__ == '__main__':
     #encdiscriminator = EncDiscriminator(args)
     
     if cuda:
-        generator.cuda()
+        generator.cuda().to(device)
         #encgenerator.cuda()
-        discriminator.cuda()
+        discriminator.cuda().to(device)
         #encdiscriminator.cuda()
         #decoder.cuda()
-        BCELoss.cuda()
-        MSELoss.cuda()
+        BCELoss.cuda().to(device)
+        MSELoss.cuda().to(device)
     else:
         print('models', generator, discriminator)
 
@@ -112,7 +117,7 @@ if __name__ == '__main__':
             datasets.CIFAR10('./data/cifar10', train=True, download=True,
                            transform=transforms.Compose([
                                 transforms.Resize(64),
-                                transforms.CenterCrop(64),
+                                #transforms.CenterCrop(64),
                                 transforms.ToTensor(),
                                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                             ])),

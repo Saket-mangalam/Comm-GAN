@@ -176,7 +176,7 @@ torch.manual_seed(manualSeed)
 # 
 
 # Root directory for dataset
-dataroot = "C:/study]/representation_learning/Hidden_gan/data/celeba"
+dataroot = "./data/celeba"
 
 # Number of workers for dataloader
 workers = 2
