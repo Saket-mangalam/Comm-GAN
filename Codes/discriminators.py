@@ -152,3 +152,33 @@ class Enc_Discriminator(nn.Module):
         #finally make 64x1
         z = self.adv_layer(z)
         return z
+    
+class DCGANDiscriminator(nn.Module):
+    def __init__(self, args):
+        super(DCGANDiscriminator, self).__init__()
+        self.args = args
+        self.main = nn.Sequential(
+            # input is 64x3x32x32
+            nn.Conv2d(3, 64, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state ize: 64x64x16x16
+            nn.Conv2d(64, 64 * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(64 * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. 64x128x8x8
+            nn.Conv2d(64 * 2, 64 * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(64 * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. 64x256x4x4
+            nn.Conv2d(64 * 4, 64 * 8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(64 * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. 64x512x2x2
+            nn.Conv2d(64 * 8, 1, 4, 1, 0, bias=False),
+            # state size. 64x1x1x1
+            nn.Sigmoid()
+        )
+
+    def forward(self, input):
+        return self.main(input)
+

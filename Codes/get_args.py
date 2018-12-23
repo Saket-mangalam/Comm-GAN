@@ -19,7 +19,7 @@ def get_args():
     parser.add_argument('-num_train_Dec', type=int, default=5)
 
     parser.add_argument('-num_epoch', type=int, default=100, help='number of epochs of training')
-    parser.add_argument('-batch_size', type=int, default=64, help='size of the batches')
+    parser.add_argument('-batch_size', type=int, default=128, help='size of the batches')
 
     parser.add_argument('-enc_num_unit', type=int, default=10)
     parser.add_argument('-dec_num_unit', type=int, default=10)
