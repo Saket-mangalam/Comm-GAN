@@ -133,7 +133,7 @@ import matplotlib.animation as animation
 from IPython.display import HTML
 
 # Set random seem for reproducibility
-manualSeed = 999
+manualSeed = 99
 #manualSeed = random.randint(1, 10000) # use if you want new results
 print("Random Seed: ", manualSeed)
 random.seed(manualSeed)
@@ -205,10 +205,10 @@ ndf = 64
 nef = 16
 
 # Number of training epochs
-num_epochs = 5
+num_epochs = 50
 
 # Learning rate for optimizers
-lr = 0.00002
+lr = 0.0002
 
 # Beta1 hyperparam for Adam optimizers
 beta1 = 0.5
@@ -251,27 +251,27 @@ ngpu = 1
 # We can use an image folder dataset the way we have it setup.
 # Create the dataset
 # Create the dataset
-#dataset = dset.ImageFolder(root=dataroot,
-#                           transform=transforms.Compose([
-#                               transforms.Resize(image_size),
-#                               transforms.CenterCrop(image_size),
-#                               transforms.ToTensor(),
-#                               transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-#                           ]))
+dataset = dset.ImageFolder(root=dataroot,
+                           transform=transforms.Compose([
+                               transforms.Resize(image_size),
+                               transforms.CenterCrop(image_size),
+                               transforms.ToTensor(),
+                               transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                           ]))
 
 # Create the dataloader
-#dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-#                                         shuffle=True, num_workers=workers)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+                                         shuffle=True, num_workers=workers)
 
-dataloader = torch.utils.data.DataLoader(
-            dset.CIFAR10('./data/cifar10', train=True, download=True,
-                           transform=transforms.Compose([
-                                transforms.Resize(64),
-                                #transforms.CenterCrop(64),
-                                transforms.ToTensor(),
-                                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                            ])),
-            batch_size=batch_size, shuffle=True,num_workers=workers)
+#dataloader = torch.utils.data.DataLoader(
+#            dset.CIFAR10('./data/cifar10', train=True, download=True,
+#                           transform=transforms.Compose([
+#                                transforms.Resize(64),
+#                                #transforms.CenterCrop(64),
+#                                transforms.ToTensor(),
+#                                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+#                            ])),
+#            batch_size=batch_size, shuffle=True,num_workers=workers)
         
 # Decide which device we want to run on
 device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
@@ -828,23 +828,23 @@ for epoch in range(num_epochs):
         #calculate encoder loss
         errE_1 = criterion(output,u)
         #calculate gardient
-        errE_1.backward(retain_graph=True)
+        errE_1.backward()
         D_enc_1 = output.mean().item()
         #forward pass fake encoded images batch
         output = netDec(fake_enc_img)
         #calculate encoder loss
         errE_2 = criterion(output,u)
         #calculate gradient
-        errE_2.backward(retain_graph=True)
+        errE_2.backward()
         D_enc_2 = output.mean().item()
         #forward pass image reconstruction loss
-        errE_3 = imgrecon_Loss(real_enc_img,real_cpu)
+        #errE_3 = imgrecon_Loss(real_enc_img,real_cpu)
         #calculate gradient
-        errE_3.backward(retain_graph=True)
+        #errE_3.backward()
         #forward pass image reconstruction loss
-        err_E4 = imgrecon_Loss(fake_enc_img,fake)
+        #err_E4 = imgrecon_Loss(fake_enc_img,fake)
         #ca;culate gradient
-        err_E4.backward(retain_graph=True)
+        #err_E4.backward()
         #add the losses
         errE = errE_1 +errE_2
         #optimization step
