@@ -828,23 +828,23 @@ for epoch in range(num_epochs):
         #calculate encoder loss
         errE_1 = criterion(output,u)
         #calculate gardient
-        errE_1.backward()
+        errE_1.backward(retain_graph=True)
         D_enc_1 = output.mean().item()
         #forward pass fake encoded images batch
         output = netDec(fake_enc_img)
         #calculate encoder loss
         errE_2 = criterion(output,u)
         #calculate gradient
-        errE_2.backward()
+        errE_2.backward(retain_graph=True)
         D_enc_2 = output.mean().item()
         #forward pass image reconstruction loss
-        #errE_3 = imgrecon_Loss(real_enc_img,real_cpu)
+        errE_3 = imgrecon_Loss(real_enc_img,real_cpu)
         #calculate gradient
-        #errE_3.backward()
+        errE_3.backward(retain_graph=True)
         #forward pass image reconstruction loss
-        #err_E4 = imgrecon_Loss(fake_enc_img,fake)
+        err_E4 = imgrecon_Loss(fake_enc_img,fake)
         #ca;culate gradient
-        #err_E4.backward()
+        err_E4.backward(retain_graph=True)
         #add the losses
         errE = errE_1 +errE_2
         #optimization step
