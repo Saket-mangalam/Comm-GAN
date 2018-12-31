@@ -133,6 +133,8 @@ if __name__ == '__main__':
     
     #initialize tensor
     Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+    
+    fixed_noise = torch.randn((args.batch_size,args.sample_noise,1,1), dtype=torch.float).to(device)
     ##############################
     #  Training ##################
     ##############################
@@ -168,7 +170,7 @@ if __name__ == '__main__':
                 real_dloss.backward()
                 D_x = real.mean().item()
                 
-                fake_imgs = generator(real_noise)
+                fake_imgs = generator(fixed_noise)
                 nonreal = discriminator(fake_imgs.detach()).view(-1)
                 fake_dloss = BCELoss(nonreal,fake)
                 fake_dloss.backward()
@@ -204,6 +206,7 @@ if __name__ == '__main__':
                     
                 #saving generated image
                 if batches_done % args.sample_interval == 0:
+                    fake_imgs = generator(fixed_noise)
                     save_image(fake_imgs.data[:25], 'images/'+identity+'/%d.png' % batches_done, nrow=5, normalize=True)
                     
     

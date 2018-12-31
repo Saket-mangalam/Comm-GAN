@@ -201,11 +201,14 @@ ngf = 64
 # Size of feature maps in discriminator
 ndf = 64
 
+#size of feature map in encder
+nef = 16
+
 # Number of training epochs
-num_epochs = 15
+num_epochs = 5
 
 # Learning rate for optimizers
-lr = 0.0002
+lr = 0.00002
 
 # Beta1 hyperparam for Adam optimizers
 beta1 = 0.5
@@ -368,11 +371,78 @@ class Generator(nn.Module):
             nn.Tanh()
             # state size. (nc) x 64 x 64
         )
+        
+        
 
     def forward(self, input):
         return self.main(input)
 
 
+class Encoder(nn.Module):
+    def __init__(self, ngpu):
+        super(Encoder, self).__init__()
+        self.ngpu = ngpu
+        self.encodable_z = nn.Sequential(
+                #input is image ncx64x64
+                nn.Conv2d(nc,ngf,3,1,1,bias=False),
+                nn.BatchNorm2d(ngf),
+                nn.LeakyReLU(0.2,inplace=True),
+                #statesize is 64x64x64
+                nn.Conv2d(ngf,ngf,3,1,1,bias=False),
+                nn.BatchNorm2d(ngf),
+                nn.LeakyReLU(0.2,inplace=True),
+                #statesize is 64x64x64
+                nn.Conv2d(ngf,ngf,3,1,1,bias=False),
+                nn.BatchNorm2d(ngf),
+                nn.LeakyReLU(0.2,inplace=True),
+                #statesize is 64x64x64
+                nn.Conv2d(ngf,ngf,3,1,1,bias=False),
+                nn.BatchNorm2d(ngf),
+                nn.LeakyReLU(0.2,inplace=True))
+        
+        self.encodable_u = nn.Sequential(
+            #input is U
+            nn.ConvTranspose2d( nz, ngf * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf * 8),
+            nn.ReLU(True),
+            # state size. (ngf*8) x 4 x 4
+            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 4),
+            nn.ReLU(True),
+            # state size. (ngf*4) x 8 x 8
+            nn.ConvTranspose2d( ngf * 4, ngf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 2),
+            nn.ReLU(True),
+            # state size. (ngf*2) x 16 x 16
+            nn.ConvTranspose2d( ngf * 2, ngf, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.ReLU(True),
+            # state size. (ngf) x 32 x 32
+            nn.ConvTranspose2d( ngf, 1, 4, 2, 1, bias=False),
+            nn.Tanh()
+            # state size. (nc) x 64 x 64
+            )
+        
+        self.encode = nn.Sequential(
+                #input is Z+U+encodablez
+                nn.Conv2d((nc+ngf+1),ngf,3,1,1,bias=False),
+                nn.BatchNorm2d(ngf),
+                nn.LeakyReLU(0.2,inplace=True),
+                #statesize is 64x64x64
+                nn.Conv2d(ngf,nef,3,1,1,bias=False),
+                nn.BatchNorm2d(nef
+                               ),
+                nn.LeakyReLU(0.2,inplace=True),
+                #state size is 16x64x64
+                nn.Conv2d(nef,nc,3,1,1,bias=False),
+                nn.Tanh())
+        
+    def forward(self,z,u):
+        enc_z = self.encodable_z(z)
+        enc_u = self.encodable_u(u)
+        input = torch.cat([enc_z,enc_u,z],dim=1)
+        return self.encode(input)
+                
 ######################################################################
 # Now, we can instantiate the generator and apply the ``weights_init``
 # function. Check out the printed model to see how the generator object is
@@ -393,7 +463,19 @@ netG.apply(weights_init)
 # Print the model
 print(netG)
 
+# Create the encoder
+netE = Encoder(ngpu).to(device)
 
+# Handle multi-gpu if desired
+if (device.type == 'cuda') and (ngpu > 1):
+    netE = nn.DataParallel(netE, list(range(ngpu)))
+
+# Apply the weights_init function to randomly initialize all weights
+#  to mean=0, stdev=0.2.
+netE.apply(weights_init)
+
+# Print the model
+print(netE)
 ######################################################################
 # Discriminator
 # ~~~~~~~~~~~~~
@@ -465,6 +547,60 @@ netD.apply(weights_init)
 print(netD)
 
 
+#########################################################################
+# Decoder Code
+
+class Decoder(nn.Module):
+    def __init__(self, ngpu):
+        super(Decoder, self).__init__()
+        self.ngpu = ngpu
+        self.main = nn.Sequential(
+            # input is (nc) x 64 x 64
+            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf) x 32 x 32
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*2) x 16 x 16
+            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*4) x 8 x 8
+            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*8) x 4 x 4
+            nn.Conv2d(ndf * 8, nz, 4, 1, 0, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, input):
+        return self.main(input)
+
+
+######################################################################
+# Now, as with the generator, we can create the decoder, apply the
+# ``weights_init`` function, and print the model’s structure.
+# 
+
+# Create the Decoder
+netDec = Decoder(ngpu).to(device)
+
+# Handle multi-gpu if desired
+if (device.type == 'cuda') and (ngpu > 1):
+    netDec = nn.DataParallel(netDec, list(range(ngpu)))
+    
+# Apply the weights_init function to randomly initialize all weights
+#  to mean=0, stdev=0.2.
+netDec.apply(weights_init)
+
+# Print the model
+print(netDec)
+
+
+
+
 ######################################################################
 # Loss Functions and Optimizers
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -500,11 +636,12 @@ print(netD)
 
 # Initialize BCELoss function
 criterion = nn.BCELoss()
+imgrecon_Loss = nn.MSELoss()
 
 # Create batch of latent vectors that we will use to visualize
 #  the progression of the generator
 fixed_noise = torch.randn(64, nz, 1, 1, device=device)
-
+fixed_u = torch.randint(0, 2, (64, nz, 1, 1), device=device)
 # Establish convention for real and fake labels during training
 real_label = 1
 fake_label = 0
@@ -512,6 +649,8 @@ fake_label = 0
 # Setup Adam optimizers for both G and D
 optimizerD = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
 optimizerG = optim.Adam(netG.parameters(), lr=lr, betas=(beta1, 0.999))
+optimizerDec = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
+optimizerE = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
 
 
 ######################################################################
@@ -595,6 +734,7 @@ os.makedirs('images', exist_ok=True)
 os.makedirs('images/'+identity, exist_ok=True)
 print("Starting Training Loop...")
 # For each epoch
+#
 for epoch in range(num_epochs):
     # For each batch in the dataloader
     for i, data in enumerate(dataloader, 0):
@@ -634,9 +774,84 @@ for epoch in range(num_epochs):
         errD = errD_real + errD_fake
         # Update D
         optimizerD.step()
-
+        
         ############################
-        # (2) Update G network: maximize log(D(G(z)))
+        # 2 Update decoder network: maximize log(Dec(x)) + log(1 - Dec(G(z)))
+        #############################
+        netDec.zero_grad()
+        #real_cpu = data[0].to(device)
+        #b_size = real_cpu.size(0)
+        u = torch.randint(0, 2, (b_size, nz, 1, 1), dtype=torch.float, device=device)
+        real_enc_img = netE(real_cpu,u)
+        fake_enc_img = netE(fake.detach(),u)
+        fake_u = torch.zeros(b_size, nz, 1, 1, device=device)
+        #label.fill_(fake_label)
+        #forward pass real batch to decoder
+        output = netDec(real_cpu)
+        #calculate loss
+        errDec_real1 = criterion(output,fake_u)
+        #calculate gradient
+        errDec_real1.backward()
+        D_E_x_1 = output.mean().item()
+        #forward pass encoded real batch to decoder
+        output = netDec(real_enc_img.detach())
+        #calculate loss
+        errDec_real2 = criterion(output,u)
+        #calculate gradient
+        errDec_real2.backward()
+        D_E_x_2 = output.mean().item()
+        #forward pass encoded fake batch to decoder
+        output = netDec(fake_enc_img.detach())
+        #calculate loss
+        errDec_fake1 = criterion(output,u)
+        #calculate gradient
+        errDec_fake1.backward()
+        D_E_G_z_1 = output.mean().item()
+        #forward pass fake batch to decoder
+        output = netDec(fake.detach())
+        #calculate loss
+        errDec_fake2 = criterion(output,u)
+        #calcualte gradient
+        errDec_fake2.backward()
+        D_E_G_z_2 = output.mean().item()
+        #add all the losses
+        errDec = errDec_real1 + errDec_real2 + errDec_fake1 + errDec_fake2
+        #step optimizer
+        optimizerDec.step()
+        
+        ############################
+        # 3 update E network: ########################
+        ############################
+        netE.zero_grad()
+        #forward pass real encoded images batch
+        output = netDec(real_enc_img)
+        #calculate encoder loss
+        errE_1 = criterion(output,u)
+        #calculate gardient
+        errE_1.backward()
+        D_enc_1 = output.mean().item()
+        #forward pass fake encoded images batch
+        output = netDec(fake_enc_img)
+        #calculate encoder loss
+        errE_2 = criterion(output,u)
+        #calculate gradient
+        errE_2.backward()
+        D_enc_2 = output.mean().item()
+        #forward pass image reconstruction loss
+        #errE_3 = imgrecon_Loss(real_enc_img,real_cpu)
+        #calculate gradient
+        #errE_3.backward()
+        #forward pass image reconstruction loss
+        #err_E4 = imgrecon_Loss(fake_enc_img,fake)
+        #ca;culate gradient
+        #err_E4.backward()
+        #add the losses
+        errE = errE_1 +errE_2
+        #optimization step
+        optimizerE.step()
+        
+        ############################
+        # (4) Update G network: maximize log(D(G(z)))
         ###########################
         netG.zero_grad()
         label.fill_(real_label)  # fake labels are real for generator cost
@@ -652,9 +867,9 @@ for epoch in range(num_epochs):
         
         # Output training stats
         if i % 50 == 0:
-            print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
+            print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tLoss_Dec: %.4f\tLoss_E: %.4f'
                   % (epoch, num_epochs, i, len(dataloader),
-                     errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
+                     errD.item(), errG.item(), errDec.item(), errE.item()))
         
         # Save Losses for plotting later
         G_losses.append(errG.item())
@@ -665,9 +880,15 @@ for epoch in range(num_epochs):
         # Check how the generator is doing by saving G's output on fixed_noise
         if (iters % 500 == 0) or ((epoch == num_epochs-1) and (i == len(dataloader)-1)):
             with torch.no_grad():
-                fake = netG(fixed_noise).detach().cpu()
-            img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
-            save_image(fake.data[:25], 'images/'+identity+'/%d.png' % batches_done, nrow=5, normalize=True)
+                fake = netG(fixed_noise).detach()
+                fake_img = fake.cpu()
+                fake_encoded = netE(fake,fixed_u).detach().cpu()
+                #real_encoded = netE(real_cpu,fixed_u).detach().cpu()
+            #img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
+            save_image(fake_img.data[:25], 'images/'+identity+'/fake%d.png' % batches_done, nrow=5, normalize=True)
+            save_image(fake_encoded.data[:25], 'images/'+identity+'/fake_enc%d.png' % batches_done, nrow=5, normalize=True)
+            #save_image(real_encoded.data[:25], 'images/'+identity+'/real_enc%d.png' % batches_done, nrow=5, normalize=True)
+            
             
             
         iters += 1
