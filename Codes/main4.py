@@ -131,9 +131,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from IPython.display import HTML
+import csv
 
 # Set random seem for reproducibility
-manualSeed = 99
+manualSeed = 999
 #manualSeed = random.randint(1, 10000) # use if you want new results
 print("Random Seed: ", manualSeed)
 random.seed(manualSeed)
@@ -208,7 +209,8 @@ nef = 16
 num_epochs = 50
 
 # Learning rate for optimizers
-lr = 0.0002
+lr1 = 0.0002
+lr2 = 0.0002
 
 # Beta1 hyperparam for Adam optimizers
 beta1 = 0.5
@@ -398,28 +400,33 @@ class Encoder(nn.Module):
                 #statesize is 64x64x64
                 nn.Conv2d(ngf,ngf,3,1,1,bias=False),
                 nn.BatchNorm2d(ngf),
+                nn.LeakyReLU(0.2,inplace=True),
+                #statesize is 64x64x64
+                nn.Conv2d(ngf,ngf,3,1,1,bias=False),
+                nn.BatchNorm2d(ngf),
                 nn.LeakyReLU(0.2,inplace=True))
+        
         
         self.encodable_u = nn.Sequential(
             #input is U
             nn.ConvTranspose2d( nz, ngf * 8, 4, 1, 0, bias=False),
             nn.BatchNorm2d(ngf * 8),
-            nn.ReLU(True),
+            nn.ELU(0.8, inplace=True),
             # state size. (ngf*8) x 4 x 4
             nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf * 4),
-            nn.ReLU(True),
+            nn.ELU(0.8, inplace=True),
             # state size. (ngf*4) x 8 x 8
             nn.ConvTranspose2d( ngf * 4, ngf * 2, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf * 2),
-            nn.ReLU(True),
+            nn.ELU(0.8, inplace=True),
             # state size. (ngf*2) x 16 x 16
             nn.ConvTranspose2d( ngf * 2, ngf, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf),
-            nn.ReLU(True),
+            nn.ELU(0.8, inplace=True),
             # state size. (ngf) x 32 x 32
             nn.ConvTranspose2d( ngf, 1, 4, 2, 1, bias=False),
-            nn.Tanh()
+            nn.ELU(0.8, inplace=True)
             # state size. (nc) x 64 x 64
             )
         
@@ -429,13 +436,19 @@ class Encoder(nn.Module):
                 nn.BatchNorm2d(ngf),
                 nn.LeakyReLU(0.2,inplace=True),
                 #statesize is 64x64x64
-                nn.Conv2d(ngf,nef,3,1,1,bias=False),
-                nn.BatchNorm2d(nef
-                               ),
+                nn.Conv2d(ngf,nef*2,3,1,1,bias=False),
+                nn.BatchNorm2d(nef*2),
+                nn.LeakyReLU(0.2,inplace=True),
+                #statesize is 32x64x64
+                nn.Conv2d(nef*2,nef,3,1,1,bias=False),
+                nn.BatchNorm2d(nef),
                 nn.LeakyReLU(0.2,inplace=True),
                 #state size is 16x64x64
                 nn.Conv2d(nef,nc,3,1,1,bias=False),
-                nn.Tanh())
+                nn.Tanh()
+                #state size is 3x64x64
+                )
+        
         
     def forward(self,z,u):
         enc_z = self.encodable_z(z)
@@ -647,10 +660,10 @@ real_label = 1
 fake_label = 0
 
 # Setup Adam optimizers for both G and D
-optimizerD = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
-optimizerG = optim.Adam(netG.parameters(), lr=lr, betas=(beta1, 0.999))
-optimizerDec = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
-optimizerE = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
+optimizerD = optim.Adam(netD.parameters(), lr=lr1, betas=(beta1, 0.999))
+optimizerG = optim.Adam(netG.parameters(), lr=lr1, betas=(beta1, 0.999))
+optimizerDec = optim.Adam(netD.parameters(), lr=lr2, betas=(beta1, 0.999))
+optimizerE = optim.Adam(netD.parameters(), lr=lr2, betas=(beta1, 0.999))
 
 
 ######################################################################
@@ -725,173 +738,185 @@ optimizerE = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
 
 # Lists to keep track of progress
 img_list = []
-G_losses = []
-D_losses = []
+#G_losses = []
+#D_losses = []
 iters = 0
 identity = str(np.random.random())[2:8]
 print(identity)
 os.makedirs('images', exist_ok=True)
 os.makedirs('images/'+identity, exist_ok=True)
+#directory for saving loss log
+os.makedirs('logbook', exist_ok=True)
 print("Starting Training Loop...")
 # For each epoch
 #
-for epoch in range(num_epochs):
-    # For each batch in the dataloader
-    for i, data in enumerate(dataloader, 0):
-
+with open('logbook/'+identity+'.csv', 'w') as csvfile:
+    filewriter = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
         
-        ############################
-        # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
-        ###########################
-        ## Train with all-real batch
-        netD.zero_grad()
-        # Format batch
-        real_cpu = data[0].to(device)
-        b_size = real_cpu.size(0)
-        label = torch.full((b_size,), real_label, device=device)
-        # Forward pass real batch through D
-        output = netD(real_cpu).view(-1)
-        # Calculate loss on all-real batch
-        errD_real = criterion(output, label)
-        # Calculate gradients for D in backward pass
-        errD_real.backward()
-        D_x = output.mean().item()
-
-        ## Train with all-fake batch
-        # Generate batch of latent vectors
-        noise = torch.randn(b_size, nz, 1, 1, device=device)
-        # Generate fake image batch with G
-        fake = netG(noise)
-        label.fill_(fake_label)
-        # Classify all fake batch with D
-        output = netD(fake.detach()).view(-1)
-        # Calculate D's loss on the all-fake batch
-        errD_fake = criterion(output, label)
-        # Calculate the gradients for this batch
-        errD_fake.backward()
-        D_G_z1 = output.mean().item()
-        # Add the gradients from the all-real and all-fake batches
-        errD = errD_real + errD_fake
-        # Update D
-        optimizerD.step()
-        
-        ############################
-        # 2 Update decoder network: maximize log(Dec(x)) + log(1 - Dec(G(z)))
-        #############################
-        netDec.zero_grad()
-        #real_cpu = data[0].to(device)
-        #b_size = real_cpu.size(0)
-        u = torch.randint(0, 2, (b_size, nz, 1, 1), dtype=torch.float, device=device)
-        real_enc_img = netE(real_cpu,u)
-        fake_enc_img = netE(fake.detach(),u)
-        fake_u = torch.zeros(b_size, nz, 1, 1, device=device)
-        #label.fill_(fake_label)
-        #forward pass real batch to decoder
-        output = netDec(real_cpu)
-        #calculate loss
-        errDec_real1 = criterion(output,fake_u)
-        #calculate gradient
-        errDec_real1.backward()
-        D_E_x_1 = output.mean().item()
-        #forward pass encoded real batch to decoder
-        output = netDec(real_enc_img.detach())
-        #calculate loss
-        errDec_real2 = criterion(output,u)
-        #calculate gradient
-        errDec_real2.backward()
-        D_E_x_2 = output.mean().item()
-        #forward pass encoded fake batch to decoder
-        output = netDec(fake_enc_img.detach())
-        #calculate loss
-        errDec_fake1 = criterion(output,u)
-        #calculate gradient
-        errDec_fake1.backward()
-        D_E_G_z_1 = output.mean().item()
-        #forward pass fake batch to decoder
-        output = netDec(fake.detach())
-        #calculate loss
-        errDec_fake2 = criterion(output,u)
-        #calcualte gradient
-        errDec_fake2.backward()
-        D_E_G_z_2 = output.mean().item()
-        #add all the losses
-        errDec = errDec_real1 + errDec_real2 + errDec_fake1 + errDec_fake2
-        #step optimizer
-        optimizerDec.step()
-        
-        ############################
-        # 3 update E network: ########################
-        ############################
-        netE.zero_grad()
-        #forward pass real encoded images batch
-        output = netDec(real_enc_img)
-        #calculate encoder loss
-        errE_1 = criterion(output,u)
-        #calculate gardient
-        errE_1.backward()
-        D_enc_1 = output.mean().item()
-        #forward pass fake encoded images batch
-        output = netDec(fake_enc_img)
-        #calculate encoder loss
-        errE_2 = criterion(output,u)
-        #calculate gradient
-        errE_2.backward()
-        D_enc_2 = output.mean().item()
-        #forward pass image reconstruction loss
-        #errE_3 = imgrecon_Loss(real_enc_img,real_cpu)
-        #calculate gradient
-        #errE_3.backward()
-        #forward pass image reconstruction loss
-        #err_E4 = imgrecon_Loss(fake_enc_img,fake)
-        #ca;culate gradient
-        #err_E4.backward()
-        #add the losses
-        errE = errE_1 +errE_2
-        #optimization step
-        optimizerE.step()
-        
-        ############################
-        # (4) Update G network: maximize log(D(G(z)))
-        ###########################
-        netG.zero_grad()
-        label.fill_(real_label)  # fake labels are real for generator cost
-        # Since we just updated D, perform another forward pass of all-fake batch through D
-        output = netD(fake).view(-1)
-        # Calculate G's loss based on this output
-        errG = criterion(output, label)
-        # Calculate gradients for G
-        errG.backward()
-        D_G_z2 = output.mean().item()
-        # Update G
-        optimizerG.step()
-        
-        # Output training stats
-        if i % 50 == 0:
-            print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tLoss_Dec: %.4f\tLoss_E: %.4f'
-                  % (epoch, num_epochs, i, len(dataloader),
-                     errD.item(), errG.item(), errDec.item(), errE.item()))
-        
-        # Save Losses for plotting later
-        G_losses.append(errG.item())
-        D_losses.append(errD.item())
-        
-        batches_done = epoch * len(dataloader) + i
-        
-        # Check how the generator is doing by saving G's output on fixed_noise
-        if (iters % 500 == 0) or ((epoch == num_epochs-1) and (i == len(dataloader)-1)):
-            with torch.no_grad():
-                fake = netG(fixed_noise).detach()
-                fake_img = fake.cpu()
-                fake_encoded = netE(fake,fixed_u).detach().cpu()
-                #real_encoded = netE(real_cpu,fixed_u).detach().cpu()
-            #img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
-            save_image(fake_img.data[:25], 'images/'+identity+'/fake%d.png' % batches_done, nrow=5, normalize=True)
-            save_image(fake_encoded.data[:25], 'images/'+identity+'/fake_enc%d.png' % batches_done, nrow=5, normalize=True)
-            #save_image(real_encoded.data[:25], 'images/'+identity+'/real_enc%d.png' % batches_done, nrow=5, normalize=True)
+    for epoch in range(num_epochs):
+        # For each batch in the dataloader
+        for i, data in enumerate(dataloader, 0):
+    
             
+            ############################
+            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+            ###########################
+            ## Train with all-real batch
+            netD.zero_grad()
+            # Format batch
+            real_cpu = data[0].to(device)
+            b_size = real_cpu.size(0)
+            label = torch.full((b_size,), real_label, device=device)
+            # Forward pass real batch through D
+            output = netD(real_cpu).view(-1)
+            # Calculate loss on all-real batch
+            errD_real = criterion(output, label)
+            # Calculate gradients for D in backward pass
+            errD_real.backward()
+            D_x = output.mean().item()
+    
+            ## Train with all-fake batch
+            # Generate batch of latent vectors
+            noise = torch.randn(b_size, nz, 1, 1, device=device)
+            # Generate fake image batch with G
+            fake = netG(noise)
+            label.fill_(fake_label)
+            # Classify all fake batch with D
+            output = netD(fake.detach()).view(-1)
+            # Calculate D's loss on the all-fake batch
+            errD_fake = criterion(output, label)
+            # Calculate the gradients for this batch
+            errD_fake.backward()
+            D_G_z1 = output.mean().item()
+            # Add the gradients from the all-real and all-fake batches
+            errD = errD_real + errD_fake
+            # Update D
+            optimizerD.step()
             
+            ############################
+            # 2 Update decoder network: maximize log(Dec(x)) + log(1 - Dec(G(z)))
+            #############################
+            netDec.zero_grad()
+            #real_cpu = data[0].to(device)
+            #b_size = real_cpu.size(0)
+            u = torch.randint(0, 2, (b_size, nz, 1, 1), dtype=torch.float, device=device)
+            real_enc_img = netE(real_cpu,u)
+            fake_enc_img = netE(fake.detach(),u)
+            fake_u = torch.zeros(b_size, nz, 1, 1, device=device)
+            #label.fill_(fake_label)
+            #forward pass real batch to decoder
+            #output = netDec(real_cpu)
+            #calculate loss
+            #errDec_real1 = criterion(output,fake_u)
+            #calculate gradient
+            #errDec_real1.backward()
+            #D_E_x_1 = output.mean().item()
+            #forward pass encoded real batch to decoder
+            output = netDec(real_enc_img.detach())
+            #calculate loss
+            errDec_real2 = criterion(output,u)
+            #calculate gradient
+            errDec_real2.backward()
+            D_E_x_2 = output.mean().item()
+            #forward pass encoded fake batch to decoder
+            output = netDec(fake_enc_img.detach())
+            #calculate loss
+            errDec_fake1 = criterion(output,u)
+            #calculate gradient
+            errDec_fake1.backward()
+            D_E_G_z_1 = output.mean().item()
+            #forward pass fake batch to decoder
+            #output = netDec(fake.detach())
+            #calculate loss
+            #errDec_fake2 = criterion(output,u)
+            #calcualte gradient
+            #errDec_fake2.backward()
+            #D_E_G_z_2 = output.mean().item()
+            #add all the losses
+            errDec = errDec_real2 + errDec_fake1 
+            #step optimizer
+            optimizerDec.step()
             
-        iters += 1
+            ############################
+            # 3 update E network: ########################
+            ############################
+            netE.zero_grad()
+            #forward pass real encoded images batch
+            output = netDec(real_enc_img)
+            #calculate encoder loss
+            errE_1 = criterion(output,u)
+            #calculate gardient
+            errE_1.backward()
+            D_enc_1 = output.mean().item()
+            #forward pass fake encoded images batch
+            output = netDec(fake_enc_img)
+            #calculate encoder loss
+            errE_2 = criterion(output,u)
+            #calculate gradient
+            errE_2.backward()
+            D_enc_2 = output.mean().item()
+            #forward pass image reconstruction loss
+            #errE_3 = imgrecon_Loss(real_enc_img,real_cpu)
+            #calculate gradient
+            #errE_3.backward()
+            #forward pass image reconstruction loss
+            #err_E4 = imgrecon_Loss(fake_enc_img,fake)
+            #ca;culate gradient
+            #err_E4.backward()
+            #add the losses
+            errE = errE_1 +errE_2
+            #optimization step
+            optimizerE.step()
+            
+            ############################
+            # (4) Update G network: maximize log(D(G(z)))
+            ###########################
+            netG.zero_grad()
+            label.fill_(real_label)  # fake labels are real for generator cost
+            # Since we just updated D, perform another forward pass of all-fake batch through D
+            output = netD(fake).view(-1)
+            # Calculate G's loss based on this output
+            errG = criterion(output, label)
+            # Calculate gradients for G
+            errG.backward()
+            D_G_z2 = output.mean().item()
+            # Update G
+            optimizerG.step()
+            
+            # Output training stats
+            if i % 50 == 0:
+                print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tLoss_Dec: %.4f\tLoss_E: %.4f'
+                      % (epoch, num_epochs, i, len(dataloader),
+                         errD.item(), errG.item(), errDec.item(), errE.item()))
+            
+            # Save Losses for plotting later
+            #G_losses.append(errG.item())
+            #D_losses.append(errD.item())
+            
+            batches_done = epoch * len(dataloader) + i
+            
+            # Check how the generator is doing by saving G's output on fixed_noise
+            if (iters % 500 == 0) or ((epoch == num_epochs-1) and (i == len(dataloader)-1)):
+                with torch.no_grad():
+                    fake = netG(fixed_noise).detach()
+                    fake_img = fake.cpu()
+                    fake_encoded = netE(fake,fixed_u).detach().cpu()
+                    #real_encoded = netE(real_cpu,fixed_u).detach().cpu()
+                #img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
+                save_image(fake_img.data[:25], 'images/'+identity+'/fake%d.png' % batches_done, nrow=5, normalize=True)
+                save_image(fake_encoded.data[:25], 'images/'+identity+'/fake_enc%d.png' % batches_done, nrow=5, normalize=True)
+                #save_image(real_encoded.data[:25], 'images/'+identity+'/real_enc%d.png' % batches_done, nrow=5, normalize=True)
+                
+            #saving log
+            if batches_done == 0:
+                filewriter.writerow(['Batchnumber','D loss','G loss','Enc Loss','Dec Loss'])
+                filewriter.writerow([batches_done,errD.item(),errG.item(),errE.item(),errDec.item()])
+            else:
+                filewriter.writerow([batches_done,errD.item(),errG.item(),errE.item(),errDec.item()])
+                
+                        
+                
+            iters += 1
 
 #save_image(img_list.data[:25], 'images/'+identity+'/image.png'  , nrow=5, normalize=True)
                     
