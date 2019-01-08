@@ -559,6 +559,19 @@ netD.apply(weights_init)
 # Print the model
 print(netD)
 
+# Create the Discriminator for encoder
+netD2 = Discriminator(ngpu).to(device)
+
+# Handle multi-gpu if desired
+if (device.type == 'cuda') and (ngpu > 1):
+    netD2 = nn.DataParallel(netD2, list(range(ngpu)))
+    
+# Apply the weights_init function to randomly initialize all weights
+#  to mean=0, stdev=0.2.
+netD2.apply(weights_init)
+
+# Print the model
+print(netD2)
 
 #########################################################################
 # Decoder Code
@@ -662,8 +675,9 @@ fake_label = 0
 # Setup Adam optimizers for both G and D
 optimizerD = optim.Adam(netD.parameters(), lr=lr1, betas=(beta1, 0.999))
 optimizerG = optim.Adam(netG.parameters(), lr=lr1, betas=(beta1, 0.999))
-optimizerDec = optim.Adam(netD.parameters(), lr=lr2, betas=(beta1, 0.999))
-optimizerE = optim.Adam(netD.parameters(), lr=lr2, betas=(beta1, 0.999))
+optimizerDec = optim.Adam(netDec.parameters(), lr=lr2, betas=(beta1, 0.999))
+optimizerE = optim.Adam(netE.parameters(), lr=lr2, betas=(beta1, 0.999))
+optimizerD2 = optim.Adam(netD2.parameters(), lr=lr2, betas=(beta1, 0.999))
 
 
 ######################################################################
@@ -837,8 +851,50 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #step optimizer
             optimizerDec.step()
             
+            #############################################
+            # 3 update Discriminator for encoding ################
+            #############################################
+            netD2.zero_grad()
+            #change label
+            label.fill_(real_label)
+            #forward pass real img batch
+            output = netD2(real_cpu).view(-1)
+            #calculate loss
+            d2_realloss = criterion(output,label)
+            #calculate grad
+            d2_realloss.backward()
+            D2_x = output.mean().item()
+            #forward pass fake image batch
+            output = netD2(fake.detach()).view(-1)
+            #calculate loss
+            d2_fakeloss = criterion(output,label)
+            #calculate grad
+            d2_fakeloss.backward()
+            D2_G_z = output.mean().item()
+            #change label
+            label.fill_(fake_label)
+            #forward pass real encoded image batch
+            output = netD2(real_enc_img.detach()).view(-1)
+            #calculate loss
+            d2_realencloss = criterion(output,label)
+            #calculate grad
+            d2_realencloss.backward()
+            D2_E_x = output.mean().item()
+            #forward pass fake encoded image batch
+            output = netD2(fake_enc_img.detach()).view(-1)
+            #calculate loss
+            d2_fakeencloss = criterion(output,label)
+            #calculate grad
+            d2_fakeencloss.backward()
+            D2_E_G_z = output.mean().item()
+            
+            #total Disc2 error
+            errD2 = d2_realloss + d2_fakeloss + d2_realencloss + d2_fakeencloss
+            #step optimizer
+            optimizerD2.step()
+            
             ############################
-            # 3 update E network: ########################
+            # 4 update E network: ########################
             ############################
             netE.zero_grad()
             #forward pass real encoded images batch
@@ -846,14 +902,14 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #calculate encoder loss
             errE_1 = criterion(output,u)
             #calculate gardient
-            errE_1.backward()
+            errE_1.backward(retain_graph=True)
             D_enc_1 = output.mean().item()
             #forward pass fake encoded images batch
             output = netDec(fake_enc_img)
             #calculate encoder loss
             errE_2 = criterion(output,u)
             #calculate gradient
-            errE_2.backward()
+            errE_2.backward(retain_graph=True)
             D_enc_2 = output.mean().item()
             #forward pass image reconstruction loss
             #errE_3 = imgrecon_Loss(real_enc_img,real_cpu)
@@ -863,13 +919,28 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #err_E4 = imgrecon_Loss(fake_enc_img,fake)
             #ca;culate gradient
             #err_E4.backward()
+            #forward pass real encoded image batch
+            output = netD2(real_enc_img).view(-1)
+            #calculate loss
+            errE_5 = criterion(output,label)
+            #calculate grad
+            errE_5.backward()
+            D2_E_x = output.mean().item()
+            #forward pass fake encoded image batch
+            output = netD2(fake_enc_img).view(-1)
+            #calculate loss
+            errE_6 = criterion(output,label)
+            #calculate grad
+            errE_6.backward()
+            D2_E_G_z = output.mean().item()
+            
             #add the losses
-            errE = errE_1 +errE_2
+            errE = errE_1 +errE_2 +errE_5 + errE_6
             #optimization step
             optimizerE.step()
             
             ############################
-            # (4) Update G network: maximize log(D(G(z)))
+            # (5) Update G network: maximize log(D(G(z)))
             ###########################
             netG.zero_grad()
             label.fill_(real_label)  # fake labels are real for generator cost
@@ -885,9 +956,9 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             
             # Output training stats
             if i % 50 == 0:
-                print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tLoss_Dec: %.4f\tLoss_E: %.4f'
+                print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tLoss_Dec: %.4f\tLoss_E: %.4f\tLoss_D2: %.4f'
                       % (epoch, num_epochs, i, len(dataloader),
-                         errD.item(), errG.item(), errDec.item(), errE.item()))
+                         errD.item(), errG.item(), errDec.item(), errE.item(),errD2.item()))
             
             # Save Losses for plotting later
             #G_losses.append(errG.item())
@@ -909,10 +980,10 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
                 
             #saving log
             if batches_done == 0:
-                filewriter.writerow(['Batchnumber','D loss','G loss','Enc Loss','Dec Loss'])
-                filewriter.writerow([batches_done,errD.item(),errG.item(),errE.item(),errDec.item()])
+                filewriter.writerow(['Batchnumber','D loss','G loss','Enc Loss','Dec Loss','D2 Loss'])
+                filewriter.writerow([batches_done,errD.item(),errG.item(),errE.item(),errDec.item(),errD2.item()])
             else:
-                filewriter.writerow([batches_done,errD.item(),errG.item(),errE.item(),errDec.item()])
+                filewriter.writerow([batches_done,errD.item(),errG.item(),errE.item(),errDec.item(),errD2.item()])
                 
                         
                 
