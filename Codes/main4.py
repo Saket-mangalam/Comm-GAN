@@ -858,12 +858,12 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #change label
             label.fill_(real_label)
             #forward pass real img batch
-            output = netD2(real_cpu).view(-1)
+            #output = netD2(real_cpu).view(-1)
             #calculate loss
-            d2_realloss = criterion(output,label)
+            #d2_realloss = criterion(output,label)
             #calculate grad
-            d2_realloss.backward()
-            D2_x = output.mean().item()
+            #d2_realloss.backward()
+            #D2_x = output.mean().item()
             #forward pass fake image batch
             output = netD2(fake.detach()).view(-1)
             #calculate loss
@@ -874,11 +874,11 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #change label
             label.fill_(fake_label)
             #forward pass real encoded image batch
-            output = netD2(real_enc_img.detach()).view(-1)
+            #output = netD2(real_enc_img.detach()).view(-1)
             #calculate loss
-            d2_realencloss = criterion(output,label)
+            #d2_realencloss = criterion(output,label)
             #calculate grad
-            d2_realencloss.backward()
+            #d2_realencloss.backward()
             D2_E_x = output.mean().item()
             #forward pass fake encoded image batch
             output = netD2(fake_enc_img.detach()).view(-1)
@@ -889,7 +889,7 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             D2_E_G_z = output.mean().item()
             
             #total Disc2 error
-            errD2 = d2_realloss + d2_fakeloss + d2_realencloss + d2_fakeencloss
+            errD2 = d2_fakeloss + d2_fakeencloss 
             #step optimizer
             optimizerD2.step()
             
@@ -901,7 +901,7 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             output = netDec(real_enc_img)
             #calculate encoder loss
             errE_1 = criterion(output,u)
-            #calculate gardient
+            #calculate gradient
             errE_1.backward(retain_graph=True)
             D_enc_1 = output.mean().item()
             #forward pass fake encoded images batch
@@ -916,9 +916,10 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #calculate gradient
             #errE_3.backward()
             #forward pass image reconstruction loss
-            #err_E4 = imgrecon_Loss(fake_enc_img,fake)
+            #errE_4 = imgrecon_Loss(fake_enc_img,fake)
             #ca;culate gradient
-            #err_E4.backward()
+            #errE_4.backward()
+            label.fill_(real_label)
             #forward pass real encoded image batch
             output = netD2(real_enc_img).view(-1)
             #calculate loss
@@ -935,7 +936,7 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             D2_E_G_z = output.mean().item()
             
             #add the losses
-            errE = errE_1 +errE_2 +errE_5 + errE_6
+            errE = errE_1 + errE_2 + errE_5 + errE_6
             #optimization step
             optimizerE.step()
             

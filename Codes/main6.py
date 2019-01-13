@@ -3,7 +3,7 @@
 DCGAN Tutorial
 ==============
 
-**Author**: `Nathan Inkawhich <https://github.com/inkawhich>`__
+**Author**: `Saket Mangalam <https://github.com/saket-mangalam>`__
 
 """
 
@@ -373,94 +373,78 @@ class Generator(nn.Module):
             nn.Tanh()
             # state size. (nc) x 64 x 64
         )
-        
-        
 
-    def forward(self, input):
-        return self.main(input)
-
-
-class Encoder(nn.Module):
-    def __init__(self, ngpu):
-        super(Encoder, self).__init__()
-        self.ngpu = ngpu
         self.encodable_z = nn.Sequential(
-                #input is image ncx64x64
-                nn.Conv2d(nc,ngf,3,1,1,bias=False),
-                nn.BatchNorm2d(ngf),
-                nn.LeakyReLU(0.2,inplace=True),
-                #statesize is 64x64x64
-                nn.Conv2d(ngf,ngf,3,1,1,bias=False),
-                nn.BatchNorm2d(ngf),
-                nn.LeakyReLU(0.2,inplace=True),
-                #statesize is 64x64x64
-                nn.Conv2d(ngf,ngf,3,1,1,bias=False),
-                nn.BatchNorm2d(ngf),
-                nn.LeakyReLU(0.2,inplace=True),
-                #statesize is 64x64x64
-                nn.Conv2d(ngf,ngf,3,1,1,bias=False),
-                nn.BatchNorm2d(ngf),
-                nn.LeakyReLU(0.2,inplace=True))
-        
+            # input is image ncx64x64
+            nn.Conv2d(nc, ngf, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.LeakyReLU(0.2, inplace=True),
+            # statesize is 64x64x64
+            nn.Conv2d(ngf, ngf, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.LeakyReLU(0.2, inplace=True),
+            # statesize is 64x64x64
+            nn.Conv2d(ngf, ngf, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.LeakyReLU(0.2, inplace=True),
+            # statesize is 64x64x64
+            nn.Conv2d(ngf, ngf, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.LeakyReLU(0.2, inplace=True),
+            # statesize is 64x64x64
+            nn.Conv2d(ngf, ngf, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.LeakyReLU(0.2, inplace=True))
+
         self.encodable_u = nn.Sequential(
-            #input is U
-            nn.Conv2d( 1, 4, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(4),
+            # input is U
+            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf * 8),
             nn.ELU(0.8, inplace=True),
-            # state size. 128x4x16x16
-            nn.Conv2d(4, 8, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(8),
+            # state size. (ngf*8) x 4 x 4
+            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 4),
             nn.ELU(0.8, inplace=True),
-            # state size. 128x8x16x16
-            nn.Conv2d( 8, 16, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(16),
+            # state size. (ngf*4) x 8 x 8
+            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 2),
             nn.ELU(0.8, inplace=True),
-            # state size. 16 x 16 x 16
-            nn.Conv2d( 16, 32, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(32),
+            # state size. (ngf*2) x 16 x 16
+            nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf),
             nn.ELU(0.8, inplace=True),
-            # state size. 32 x16 x 16
-            nn.Conv2d( 32,48, 3, 1, 1, bias=False),
-            nn.Tanh()
-            # state size. 48 x 16 x 16
-            )
-        
-        self.linear = nn.Sequential(
-                #input is u state size: 128,100
-                nn.Linear(nz,ngf*2,bias=False),
-                nn.BatchNorm1d(ngf*2),
-                nn.ELU(0.8, inplace=True),
-                #state size: 128x128
-                nn.Linear(ngf*2,ngf*4,bias=False),
-                nn.BatchNorm1d(ngf*4),
-                nn.ELU(0.8, inplace=True)
-                #state size: 128x256
-                )
-        
+            # state size. (ngf) x 32 x 32
+            nn.ConvTranspose2d(ngf, 1, 4, 2, 1, bias=False),
+            nn.ELU(0.8, inplace=True)
+            # state size. (nc) x 64 x 64
+        )
+
         self.encode = nn.Sequential(
-                #input is Z+encU+encodablez
-                nn.Conv2d((2*nc + ngf),ngf,3,1,1,bias=False),
-                nn.BatchNorm2d(ngf),
-                nn.LeakyReLU(0.2,inplace=True),
-                #statesize is 64x64x64
-                nn.Conv2d(ngf,nef,3,1,1,bias=False),
-                nn.BatchNorm2d(nef),
-                nn.LeakyReLU(0.2,inplace=True),
-                #state size is 16x64x64
-                nn.Conv2d(nef,nc,3,1,1,bias=False),
-                nn.Tanh())
-        
-    def forward(self,z,u):
-        enc_z = self.encodable_z(z)
-        #u  state size: 128, 100
-        enc_u = self.linear(u)
-        enc_u = enc_u.view(u.shape[0],1,nef,nef) # 128,1,16,16
-        enc_u = self.encodable_u(enc_u)
-        #u = u.view(self.args.batch_size,-1) # 64,1024
-        enc_u = enc_u.view(u.shape[0],nc,ngf,ngf)#128x3x64x64
-        input = torch.cat([enc_z,enc_u,z],dim=1)
+            # input is Z+U+encodablez
+            nn.Conv2d((nc + ngf + 1), ngf, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.LeakyReLU(0.2, inplace=True),
+            # statesize is 64x64x64
+            nn.Conv2d(ngf, nef * 2, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(nef * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # statesize is 32x64x64
+            nn.Conv2d(nef * 2, nef, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(nef),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size is 16x64x64
+            nn.Conv2d(nef, nc, 3, 1, 1, bias=False),
+            nn.Tanh()
+            # state size is 3x64x64
+        )
+
+    def forward(self, z, u):
+        real = self.main(z)
+        enc_z = self.encodable_z(real)
+        enc_u = self.encodable_u(u)
+        input = torch.cat([enc_z, enc_u, real], dim=1)
         return self.encode(input)
-                
+
 ######################################################################
 # Now, we can instantiate the generator and apply the ``weights_init``
 # function. Check out the printed model to see how the generator object is
@@ -481,19 +465,7 @@ netG.apply(weights_init)
 # Print the model
 print(netG)
 
-# Create the encoder
-netE = Encoder(ngpu).to(device)
 
-# Handle multi-gpu if desired
-if (device.type == 'cuda') and (ngpu > 1):
-    netE = nn.DataParallel(netE, list(range(ngpu)))
-
-# Apply the weights_init function to randomly initialize all weights
-#  to mean=0, stdev=0.2.
-netE.apply(weights_init)
-
-# Print the model
-print(netE)
 ######################################################################
 # Discriminator
 # ~~~~~~~~~~~~~
@@ -564,19 +536,7 @@ netD.apply(weights_init)
 # Print the model
 print(netD)
 
-# Create the Discriminator for encoder
-netD2 = Discriminator(ngpu).to(device)
 
-# Handle multi-gpu if desired
-if (device.type == 'cuda') and (ngpu > 1):
-    netD2 = nn.DataParallel(netD2, list(range(ngpu)))
-    
-# Apply the weights_init function to randomly initialize all weights
-#  to mean=0, stdev=0.2.
-netD2.apply(weights_init)
-
-# Print the model
-print(netD2)
 
 #########################################################################
 # Decoder Code
@@ -674,7 +634,7 @@ imgrecon_Loss = nn.MSELoss()
 # Create batch of latent vectors that we will use to visualize
 #  the progression of the generator
 fixed_noise = torch.randn(64, nz, 1, 1, device=device)
-fixed_u = torch.randint(0, 2, (64, nz), device=device)
+fixed_u = torch.randint(0, 2, (64, nz,1,1), device=device)
 # Establish convention for real and fake labels during training
 real_label = 1
 fake_label = 0
@@ -683,8 +643,8 @@ fake_label = 0
 optimizerD = optim.Adam(netD.parameters(), lr=lr1, betas=(beta1, 0.999))
 optimizerG = optim.Adam(netG.parameters(), lr=lr1, betas=(beta1, 0.999))
 optimizerDec = optim.Adam(netDec.parameters(), lr=lr2, betas=(beta1, 0.999))
-optimizerE = optim.Adam(netE.parameters(), lr=lr2, betas=(beta1, 0.999))
-optimizerD2 = optim.Adam(netD2.parameters(), lr=lr2, betas=(beta1, 0.999))
+#optimizerE = optim.Adam(netE.parameters(), lr=lr2, betas=(beta1, 0.999))
+#optimizerD2 = optim.Adam(netD2.parameters(), lr=lr2, betas=(beta1, 0.999))
 
 ######################################################################
 # Training
@@ -798,8 +758,9 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             ## Train with all-fake batch
             # Generate batch of latent vectors
             noise = torch.randn(b_size, nz, 1, 1, device=device)
+            u = torch.randint(0, 2, (b_size, nz, 1, 1), dtype=torch.float, device=device)
             # Generate fake image batch with G
-            fake = netG(noise)
+            fake = netG(noise,u)
             label.fill_(fake_label)
             # Classify all fake batch with D
             output = netD(fake.detach()).view(-1)
@@ -819,10 +780,10 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             netDec.zero_grad()
             #real_cpu = data[0].to(device)
             #b_size = real_cpu.size(0)
-            u = torch.randint(0, 2, (b_size, nz), dtype=torch.float, device=device)
-            real_enc_img = netE(real_cpu,u)
-            fake_enc_img = netE(fake.detach(),u)
-            fake_u = torch.zeros(b_size, nz, 1, 1, device=device)
+            #u = torch.randint(0, 2, (b_size, nz), dtype=torch.float, device=device)
+            #real_enc_img = netE(real_cpu,u)
+            #fake_enc_img = netE(fake.detach(),u)
+            #fake_u = torch.zeros(b_size, nz, 1, 1, device=device)
             #label.fill_(fake_label)
             #forward pass real batch to decoder
             #output = netDec(real_cpu)
@@ -832,19 +793,19 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #errDec_real1.backward()
             #D_E_x_1 = output.mean().item()
             #forward pass encoded real batch to decoder
-            output = netDec(real_enc_img.detach())
+            output = netDec(fake.detach())
             #calculate loss
-            errDec_real2 = criterion(output,u)
+            errDec = criterion(output,u)
             #calculate gradient
-            errDec_real2.backward()
+            errDec.backward()
             D_E_x_2 = output.mean().item()
             #forward pass encoded fake batch to decoder
-            output = netDec(fake_enc_img.detach())
+            #output = netDec(fake_enc_img.detach())
             #calculate loss
-            errDec_fake1 = criterion(output,u)
+            #errDec_fake1 = criterion(output,u)
             #calculate gradient
-            errDec_fake1.backward()
-            D_E_G_z_1 = output.mean().item()
+            #errDec_fake1.backward()
+            #D_E_G_z_1 = output.mean().item()
             #forward pass fake batch to decoder
             #output = netDec(fake.detach())
             #calculate loss
@@ -853,99 +814,10 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #errDec_fake2.backward()
             #D_E_G_z_2 = output.mean().item()
             #add all the losses
-            errDec = errDec_real2 + errDec_fake1 
+            #errDec = errDec_1
             #step optimizer
             optimizerDec.step()
-            
-            #############################################
-            # 3 update Discriminator for encoding ################
-            #############################################
-            netD2.zero_grad()
-            #change label
-            label.fill_(real_label)
-            #forward pass real img batch
-            #output = netD2(real_cpu).view(-1)
-            #calculate loss
-            #d2_realloss = criterion(output,label)
-            #calculate grad
-            #d2_realloss.backward()
-            #D2_x = output.mean().item()
-            #forward pass fake image batch
-            output = netD2(fake.detach()).view(-1)
-            #calculate loss
-            d2_fakeloss = criterion(output,label)
-            #calculate grad
-            d2_fakeloss.backward()
-            D2_G_z = output.mean().item()
-            #change label
-            label.fill_(fake_label)
-            #forward pass real encoded image batch
-            #output = netD2(real_enc_img.detach()).view(-1)
-            #calculate loss
-            #d2_realencloss = criterion(output,label)
-            #calculate grad
-            #d2_realencloss.backward()
-            #D2_E_x = output.mean().item()
-            #forward pass fake encoded image batch
-            output = netD2(fake_enc_img.detach()).view(-1)
-            #calculate loss
-            d2_fakeencloss = criterion(output,label)
-            #calculate grad
-            d2_fakeencloss.backward()
-            D2_E_G_z = output.mean().item()
-            
-            #total Disc2 error
-            errD2 = d2_fakeloss + d2_fakeencloss
-            #step optimizer
-            optimizerD2.step()
-            
-            ############################
-            # 3 update E network: ########################
-            ############################
-            netE.zero_grad()
-            #forward pass real encoded images batch
-            output = netDec(real_enc_img)
-            #calculate encoder loss
-            errE_1 = criterion(output,u)
-            #calculate gardient
-            errE_1.backward(retain_graph=True)
-            D_enc_1 = output.mean().item()
-            #forward pass fake encoded images batch
-            output = netDec(fake_enc_img)
-            #calculate encoder loss
-            errE_2 = criterion(output,u)
-            #calculate gradient
-            errE_2.backward(retain_graph=True)
-            D_enc_2 = output.mean().item()
-            #forward pass image reconstruction loss
-            #errE_3 = imgrecon_Loss(real_enc_img,real_cpu)
-            #calculate gradient
-            #errE_3.backward()
-            #forward pass image reconstruction loss
-            #errE_4 = imgrecon_Loss(fake_enc_img,fake)
-            #ca;culate gradient
-            #errE_4.backward()
-            label.fill_(real_label)
-            #forward pass real encoded image batch
-            output = netD2(real_enc_img).view(-1)
-            #calculate loss
-            errE_5 = criterion(output,label)
-            #calculate grad
-            errE_5.backward()
-            D2_E_x = output.mean().item()
-            #forward pass fake encoded image batch
-            output = netD2(fake_enc_img).view(-1)
-            #calculate loss
-            errE_6 = criterion(output,label)
-            #calculate grad
-            errE_6.backward()
-            D2_E_G_z = output.mean().item()
-            
-            #add the losses
-            errE = errE_1 +errE_2 +errE_5 + errE_6
-            #optimization step
-            optimizerE.step()
-            
+
             ############################
             # (4) Update G network: maximize log(D(G(z)))
             ###########################
@@ -954,10 +826,16 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             # Since we just updated D, perform another forward pass of all-fake batch through D
             output = netD(fake).view(-1)
             # Calculate G's loss based on this output
-            errG = criterion(output, label)
+            errG_1 = criterion(output, label)
             # Calculate gradients for G
-            errG.backward()
+            errG_1.backward(retain_graph=True)
             D_G_z2 = output.mean().item()
+            #Calculate Decoder loss and backprop
+            output = netDec(fake)
+            errG_2 = criterion(output,u)
+            #calculate grad
+            errG_2.backward()
+            Dec_G_z = output.mean().item()
             # Update G
             optimizerG.step()
             
@@ -965,9 +843,9 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
              
             # Output training stats
             if i % 50 == 0:
-                print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tLoss_Dec: %.4f\tLoss_E: %.4f\tLoss_D2: %.4f'
+                print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G1: %.4f\tLoss_Dec: %.4f\tLoss_G2: %.4f'
                       % (epoch, num_epochs, i, len(dataloader),
-                         errD.item(), errG.item(), errDec.item(), errE.item(),errD2.item()))
+                         errD.item(), errG_1.item(), errDec.item(), errG_2.item()))
             
             # Save Losses for plotting later
             #G_losses.append(errG.item())
@@ -978,21 +856,21 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             # Check how the generator is doing by saving G's output on fixed_noise
             if (iters % 500 == 0) or ((epoch == num_epochs-1) and (i == len(dataloader)-1)):
                 with torch.no_grad():
-                    fake = netG(fixed_noise).detach()
+                    fake = netG(fixed_noise,fixed_u).detach()
                     fake_img = fake.cpu()
-                    fake_encoded = netE(fake,fixed_u).detach().cpu()
+                    #fake_encoded = netE(fake,fixed_u).detach().cpu()
                     #real_encoded = netE(real_cpu,fixed_u).detach().cpu()
                 #img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
                 save_image(fake_img.data[:25], 'images/'+identity+'/fake%d.png' % batches_done, nrow=5, normalize=True)
-                save_image(fake_encoded.data[:25], 'images/'+identity+'/fake_enc%d.png' % batches_done, nrow=5, normalize=True)
+                #save_image(fake_encoded.data[:25], 'images/'+identity+'/fake_enc%d.png' % batches_done, nrow=5, normalize=True)
                 #save_image(real_encoded.data[:25], 'images/'+identity+'/real_enc%d.png' % batches_done, nrow=5, normalize=True)
                 
             #saving log
             if batches_done == 0:
-                filewriter.writerow(['Batchnumber','D loss','G loss','Enc Loss','Dec Loss','D2 Loss'])
-                filewriter.writerow([batches_done,errD.item(),errG.item(),errE.item(),errDec.item(),errD2.item()])
+                filewriter.writerow(['Batchnumber','D loss','G loss','Dec Loss','G2 Loss'])
+                filewriter.writerow([batches_done,errD.item(),errG_1.item(),errDec.item(), errG_2.item()])
             else:
-                filewriter.writerow([batches_done,errD.item(),errG.item(),errE.item(),errDec.item(),errD2.item()])
+                filewriter.writerow([batches_done,errD.item(),errG_1.item(),errDec.item(), errG_2.item()])
                 
                         
                 
