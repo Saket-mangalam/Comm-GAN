@@ -854,15 +854,17 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             # Calculate G's loss based on this output
             errG_1 = criterion(output, label)
             # Calculate gradients for G
-            errG_1.backward(retain_graph=True)
+            #errG_1.backward(retain_graph=True)
             D_G_z2 = output.mean().item()
             #Calculate Decoder loss and backprop
             output = netDec(fake)
             errG_2 = criterion(output,u)
             #calculate grad
-            errG_2.backward()
+            #errG_2.backward()
             Dec_G_z = output.mean().item()
             # Update G
+            errG = errG_1 + errG_2
+            errG.backward()
             optimizerG.step()
             
             
