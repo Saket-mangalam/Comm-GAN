@@ -182,7 +182,7 @@ if __name__ == '__main__':
                 
                 #generate
                 nreal = discriminator(fake_imgs).view(-1)
-                fake_gloss = BCELoss(nreal,fake)
+                fake_gloss = BCELoss(nreal,valid)
                 fake_gloss.backward()
                 D_G_z2 = nreal.mean().item()
                 
