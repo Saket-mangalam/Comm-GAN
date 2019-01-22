@@ -128,6 +128,7 @@ import torchvision.transforms as transforms
 import torchvision.utils as vutils
 from torchvision.utils import save_image
 import numpy as np
+from torch import autograd
 from utils import channel, errors_ber, weights_init_normal
 
 import matplotlib.pyplot as plt
@@ -139,26 +140,6 @@ from SpectralNormalization import SpectralNormalization
 # WGAN-GP utility
 import torch.autograd as autograd
 
-def compute_gradient_penalty(D, real_samples, fake_samples):
-    """Calculates the gradient penalty loss for WGAN GP"""
-    # Random weight term for interpolation between real and fake samples
-    alpha = torch.randn(real_samples.size(0), 1, 1, 1, device=device)
-    # Get random interpolation between real and fake samples
-    interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
-    d_interpolates = D(interpolates)
-    fake = torch.full((real_samples.size(0), 1, 1, 1), 1, device=device)
-    # Get gradient w.r.t. interpolates
-    gradients = autograd.grad(
-        outputs=d_interpolates,
-        inputs=interpolates,
-        grad_outputs=fake,
-        create_graph=True,
-        retain_graph=True,
-        only_inputs=True,
-    )[0]
-    gradients = gradients.view(gradients.size(0), -1)
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
-    return gradient_penalty
 
 # Set random seem for reproducibility
 manualSeed = 999
@@ -250,6 +231,31 @@ ngpu = 1
 lambda_gp = 10
 # mean of noise channel
 noise_std=0.1
+
+def compute_gradient_penalty(D, real_samples, fake_samples):
+    """Calculates the gradient penalty loss for WGAN GP"""
+    batch_size = real_samples.size(0)
+    # Random weight term for interpolation between real and fake samples
+    alpha = torch.rand(batch_size, 1, device=device)
+    alpha = alpha.expand(batch_size, int(real_samples.nelement()/batch_size)).contiguous().view(batch_size, 3, 64, 64)
+    #alpha = alpha.cuda(gpu) if use_cuda else alpha
+    interpolates = alpha * real_samples + ((1 - alpha) * fake_samples)
+    # Get random interpolation between real and fake samples
+    interpolates = autograd.Variable(interpolates, requires_grad = True).to(device)
+    d_interpolates = D(interpolates)
+    #fake = torch.full((real_samples.size(0), 1, 1, 1), 1, device=device)
+    # Get gradient w.r.t. interpolates
+    gradients = autograd.grad(
+        outputs=d_interpolates,
+        inputs=interpolates,
+        grad_outputs=torch.ones(d_interpolates.size(), device=device),
+        create_graph=True,
+        retain_graph=True,
+        only_inputs=True
+    )[0]
+    gradients = gradients.view(gradients.size(0), -1)
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * lambda_gp
+    return gradient_penalty
 
 
 ######################################################################
@@ -780,15 +786,15 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             real_cpu = data[0].to(device)
             b_size = real_cpu.size(0)
             label = torch.full((b_size,), real_label, device=device)
-            labelr = torch.full((b_size,), real_label, device=device)
-            labelf = torch.full((b_size,), fake_label, device=device)
+            #labelr = torch.full((b_size,), real_label, device=device)
+            #labelf = torch.full((b_size,), fake_label, device=device)
             # Forward pass real batch through D
-            outputr = netD(real_cpu).view(-1)
+            output = netD(real_cpu).view(-1)
             # Calculate loss on all-real batch
-            errD_real = criterion(outputr, labelr)
+            errD_real = criterion(output, label)
             # Calculate gradients for D in backward pass
-            #errD_real.backward()
-            D_x = outputr.mean().item()
+            errD_real.backward()
+            D_x = output.mean().item()
     
             ## Train with all-fake batch
             # Generate batch of latent vectors
@@ -798,22 +804,23 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             fake = netG(noise,u)
             label.fill_(fake_label)
             # Classify all fake batch with D
-            outputf = netD(fake.detach()).view(-1)
+            output = netD(fake.detach()).view(-1)
             # Calculate D's loss on the all-fake batch
-            errD_fake = criterion(outputf, labelf)
+            errD_fake = criterion(output, label)
             # Calculate the gradients for this batch
-            #errD_fake.backward()
-            D_G_z1 = outputf.mean().item()
+            errD_fake.backward()
+            D_G_z1 = output.mean().item()
 
             # Update D
             #compute gradient penalty
             #highlight is wgan_gp not needed
             gradient_penalty = compute_gradient_penalty(netD, real_cpu.data, fake.data)
+            gradient_penalty.backward()
 
             # Add the gradients from the all-real and all-fake batches
-            errD = errD_real + errD_fake + lambda_gp*gradient_penalty
+            errD = errD_real + errD_fake + gradient_penalty
             #calculate gradient
-            errD.backward()
+            #errD.backward()
             #D_gp = output.mean().item()
             optimizerD.step()
             
@@ -875,17 +882,17 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             # Calculate G's loss based on this output
             errG_1 = criterion(output, label)
             # Calculate gradients for G
-            #errG_1.backward(retain_graph=True)
+            errG_1.backward(retain_graph=True)
             D_G_z2 = output.mean().item()
             #Calculate Decoder loss and backprop
             output = netDec(fake)
             errG_2 = criterion(output,u)
             #calculate grad
-            #errG_2.backward()
+            errG_2.backward()
             Dec_G_z = output.mean().item()
             # Update G
             errG = errG_1 + errG_2
-            errG.backward()
+            #errG.backward()
             optimizerG.step()
             
             
