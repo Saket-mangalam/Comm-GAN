@@ -217,11 +217,11 @@ nef = 16
 num_epochs = 50
 
 # Learning rate for optimizers
-lr1 = 0.0002
-lr2 = 0.0002
+lr1 = 0.0001
+lr2 = 0.0001
 
 # Beta1 hyperparam for Adam optimizers
-beta1 = 0.5
+beta1 = 0.9
 
 # Number of GPUs available. Use 0 for CPU mode.
 ngpu = 1
@@ -230,7 +230,7 @@ ngpu = 1
 # lambda for gradient penalty
 lambda_gp = 10
 # mean of noise channel
-noise_std=0.1
+noise_std=0.0
 
 def compute_gradient_penalty(D, real_samples, fake_samples):
     """Calculates the gradient penalty loss for WGAN GP"""
@@ -254,7 +254,7 @@ def compute_gradient_penalty(D, real_samples, fake_samples):
         only_inputs=True
     )[0]
     gradients = gradients.view(gradients.size(0), -1)
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * lambda_gp
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
     return gradient_penalty
 
 
@@ -630,7 +630,14 @@ netDec.apply(weights_init)
 # Print the model
 print(netDec)
 
+#BER Loss of Decoder
+def errors_ber(y_pred, y_true):
+    y_true = y_true.view(y_true.shape[0], -1, 1)
+    y_pred = y_pred.view(y_pred.shape[0], -1, 1)
 
+    myOtherTensor = torch.ne(torch.round(y_true), torch.round(y_pred)).float()
+    k = sum(sum(myOtherTensor))/(myOtherTensor.shape[0]*myOtherTensor.shape[1])
+    return k
 
 
 ######################################################################
@@ -669,6 +676,9 @@ print(netDec)
 # Initialize BCELoss function
 criterion = nn.BCELoss()
 imgrecon_Loss = nn.MSELoss()
+#ones and minus ones for wgan
+one = torch.tensor(1.0, device=device)
+mone = one * -1
 
 # Create batch of latent vectors that we will use to visualize
 #  the progression of the generator
@@ -679,9 +689,9 @@ real_label = 1
 fake_label = 0
 
 # Setup Adam optimizers for both G and D
-optimizerD = optim.Adam(netD.parameters(), lr=lr1, betas=(beta1, 0.999))
-optimizerG = optim.Adam(netG.parameters(), lr=lr1, betas=(beta1, 0.999))
-optimizerDec = optim.Adam(netDec.parameters(), lr=lr2, betas=(beta1, 0.999))
+optimizerD = optim.Adam(netD.parameters(), lr=lr1, betas=(beta1, 0.99))
+optimizerG = optim.Adam(netG.parameters(), lr=lr1, betas=(beta1, 0.99))
+optimizerDec = optim.Adam(netDec.parameters(), lr=lr2, betas=(beta1, 0.99))
 #optimizerE = optim.Adam(netE.parameters(), lr=lr2, betas=(beta1, 0.999))
 #optimizerD2 = optim.Adam(netD2.parameters(), lr=lr2, betas=(beta1, 0.999))
 
@@ -785,15 +795,17 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             # Format batch
             real_cpu = data[0].to(device)
             b_size = real_cpu.size(0)
+            #real_cpu_v = autograd.Variable(real_cpu)
             label = torch.full((b_size,), real_label, device=device)
             #labelr = torch.full((b_size,), real_label, device=device)
             #labelf = torch.full((b_size,), fake_label, device=device)
             # Forward pass real batch through D
             output = netD(real_cpu).view(-1)
             # Calculate loss on all-real batch
-            errD_real = criterion(output, label)
+            #errD_real = criterion(output, label)
             # Calculate gradients for D in backward pass
-            errD_real.backward()
+            errD_real = output.mean()
+            errD_real.backward(mone)
             D_x = output.mean().item()
     
             ## Train with all-fake batch
@@ -802,23 +814,27 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             u = torch.randint(0, 2, (b_size, nz, 1, 1), dtype=torch.float, device=device)
             # Generate fake image batch with G
             fake = netG(noise,u)
+            #fake_v = autograd.Variable(fake)
             label.fill_(fake_label)
             # Classify all fake batch with D
             output = netD(fake.detach()).view(-1)
             # Calculate D's loss on the all-fake batch
-            errD_fake = criterion(output, label)
+            #errD_fake = criterion(output, label)
             # Calculate the gradients for this batch
-            errD_fake.backward()
+            errD_fake = output.mean()
+            errD_fake.backward(one)
             D_G_z1 = output.mean().item()
 
             # Update D
             #compute gradient penalty
-            #highlight is wgan_gp not needed
-            gradient_penalty = compute_gradient_penalty(netD, real_cpu.data, fake.data)
-            gradient_penalty.backward()
+            #highlight if wgan_gp not needed
+            for _ in range(lambda_gp):
+                gradient_penalty = compute_gradient_penalty(netD, real_cpu.data, fake.data)
+                gradient_penalty.backward(retain_graph=True)
 
             # Add the gradients from the all-real and all-fake batches
-            errD = errD_real + errD_fake + gradient_penalty
+            errD = errD_fake - errD_real + gradient_penalty
+            wasserstein_D = errD_real - errD_fake
             #calculate gradient
             #errD.backward()
             #D_gp = output.mean().item()
@@ -849,7 +865,7 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             noisy_fake = noise + fake.detach()
             output = netDec(noisy_fake)
             #calculate loss
-            errDec = criterion(output,u)
+            errDec = criterion(output, u)
             #calculate gradient
             errDec.backward()
             D_E_x_2 = output.mean().item()
@@ -870,6 +886,7 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #add all the losses
             #errDec = errDec_1
             #step optimizer
+
             optimizerDec.step()
 
             ############################
@@ -880,10 +897,11 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             # Since we just updated D, perform another forward pass of all-fake batch through D
             output = netD(fake).view(-1)
             # Calculate G's loss based on this output
-            errG_1 = criterion(output, label)
+            #errG_1 = criterion(output, label)
+            errG_1 = output.mean()
             # Calculate gradients for G
-            errG_1.backward(retain_graph=True)
-            D_G_z2 = output.mean().item()
+            errG_1.backward(mone, retain_graph=True)
+            D_G_z2 = -output.mean().item()
             #Calculate Decoder loss and backprop
             output = netDec(fake)
             errG_2 = criterion(output,u)
@@ -894,14 +912,18 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             errG = errG_1 + errG_2
             #errG.backward()
             optimizerG.step()
-            
-            
+
+            # output right now is set to u decoded from decoder, so we can use that directly for ber
+            # ber is calculated
+            ber = errors_ber(output, u)
              
             # Output training stats
             if i % 50 == 0:
-                print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G1: %.4f\tLoss_Dec: %.4f\tLoss_G2: %.4f'
+                #decoded_u = netDec(fake).detach()
+
+                print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G1: %.4f\tLoss_Dec: %.4f\tLoss_G2: %.4f\tBER_Loss: %.4f'
                       % (epoch, num_epochs, i, len(dataloader),
-                         errD.item(), errG_1.item(), errDec.item(), errG_2.item()))
+                         errD.item(), errG_1.item(), errDec.item(), errG_2.item(), ber.item()))
             
             # Save Losses for plotting later
             #G_losses.append(errG.item())
@@ -913,6 +935,7 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             if (iters % 500 == 0) or ((epoch == num_epochs-1) and (i == len(dataloader)-1)):
                 with torch.no_grad():
                     fake = netG(fixed_noise,fixed_u).detach()
+
                     fake_img = fake.cpu()
                     #fake_encoded = netE(fake,fixed_u).detach().cpu()
                     #real_encoded = netE(real_cpu,fixed_u).detach().cpu()
@@ -923,10 +946,10 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
                 
             #saving log
             if batches_done == 0:
-                filewriter.writerow(['Batchnumber','D loss','G loss','Dec Loss','G2 Loss'])
-                filewriter.writerow([batches_done,errD.item(),errG_1.item(),errDec.item(), errG_2.item()])
+                filewriter.writerow(['Batchnumber','D loss','G loss','Dec Loss','G2 Loss','BER Loss'])
+                filewriter.writerow([batches_done,errD.item(),errG_1.item(),errDec.item(), errG_2.item(), ber.item()])
             else:
-                filewriter.writerow([batches_done,errD.item(),errG_1.item(),errDec.item(), errG_2.item()])
+                filewriter.writerow([batches_done,errD.item(),errG_1.item(),errDec.item(), errG_2.item(), ber.item()])
                 
                         
                 
