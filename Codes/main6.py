@@ -217,11 +217,11 @@ nef = 16
 num_epochs = 50
 
 # Learning rate for optimizers
-lr1 = 0.0001
-lr2 = 0.0001
+lr1 = 0.0002
+lr2 = 0.0002
 
-# Beta1 hyperparam for Adam optimizers
-beta1 = 0.9
+# Beta1 hyperparameter for Adam optimizers
+beta1 = 0.5
 
 # Number of GPUs available. Use 0 for CPU mode.
 ngpu = 1
@@ -229,8 +229,12 @@ ngpu = 1
 # Variable parameters for mixing
 # lambda for gradient penalty
 lambda_gp = 10
+lambda_D = 0.25
+lambda_Dec = 0.75
 # mean of noise channel
 noise_std=0.0
+
+num_dec_train = 5
 
 def compute_gradient_penalty(D, real_samples, fake_samples):
     """Calculates the gradient penalty loss for WGAN GP"""
@@ -254,7 +258,7 @@ def compute_gradient_penalty(D, real_samples, fake_samples):
         only_inputs=True
     )[0]
     gradients = gradients.view(gradients.size(0), -1)
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()* lambda_gp
     return gradient_penalty
 
 
@@ -537,15 +541,15 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf) x 32 x 32
             SpectralNormalization(nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False)),
-            #nn.BatchNorm2d(ndf * 2),
+            nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*2) x 16 x 16
             SpectralNormalization(nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False)),
-            #nn.BatchNorm2d(ndf * 4),
+            nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*4) x 8 x 8
             SpectralNormalization(nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False)),
-            #nn.BatchNorm2d(ndf * 8),
+            nn.BatchNorm2d(ndf * 8),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*8) x 4 x 4
             SpectralNormalization(nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)),
@@ -802,10 +806,10 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             # Forward pass real batch through D
             output = netD(real_cpu).view(-1)
             # Calculate loss on all-real batch
-            #errD_real = criterion(output, label)
+            errD_real = criterion(output, label)
             # Calculate gradients for D in backward pass
-            errD_real = output.mean()
-            errD_real.backward(mone)
+            #errD_real = output.mean()
+            errD_real.backward()
             D_x = output.mean().item()
     
             ## Train with all-fake batch
@@ -819,21 +823,21 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             # Classify all fake batch with D
             output = netD(fake.detach()).view(-1)
             # Calculate D's loss on the all-fake batch
-            #errD_fake = criterion(output, label)
+            errD_fake = criterion(output, label)
             # Calculate the gradients for this batch
-            errD_fake = output.mean()
-            errD_fake.backward(one)
+            #errD_fake = output.mean()
+            errD_fake.backward()
             D_G_z1 = output.mean().item()
 
             # Update D
             #compute gradient penalty
             #highlight if wgan_gp not needed
-            for _ in range(lambda_gp):
-                gradient_penalty = compute_gradient_penalty(netD, real_cpu.data, fake.data)
-                gradient_penalty.backward(retain_graph=True)
+            #for _ in range(lambda_gp):
+            #gradient_penalty = compute_gradient_penalty(netD, real_cpu.data, fake.data)
+            #gradient_penalty.backward()
 
             # Add the gradients from the all-real and all-fake batches
-            errD = errD_fake - errD_real + gradient_penalty
+            errD = errD_fake - errD_real
             wasserstein_D = errD_real - errD_fake
             #calculate gradient
             #errD.backward()
@@ -861,14 +865,16 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #forward pass encoded real batch to decoder
 
             #add noise to image
-            noise = noise_std * torch.randn(fake.shape, dtype=torch.float, device=device)
-            noisy_fake = noise + fake.detach()
-            output = netDec(noisy_fake)
-            #calculate loss
-            errDec = criterion(output, u)
-            #calculate gradient
-            errDec.backward()
-            D_E_x_2 = output.mean().item()
+            channel_noise = noise_std * torch.randn(fake.shape, dtype=torch.float, device=device)
+            noisy_fake = channel_noise + fake.detach()
+            for _ in range(num_dec_train):
+
+                output = netDec(noisy_fake.detach())
+                #calculate loss
+                errDec = criterion(output, u)
+                #calculate gradient
+                errDec.backward()
+                D_E_x_2 = output.mean().item()
             #forward pass encoded fake batch to decoder
             #output = netDec(fake_enc_img.detach())
             #calculate loss
@@ -897,20 +903,20 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             # Since we just updated D, perform another forward pass of all-fake batch through D
             output = netD(fake).view(-1)
             # Calculate G's loss based on this output
-            #errG_1 = criterion(output, label)
-            errG_1 = output.mean()
+            errG_1 = criterion(output, label)
+            #errG_1 = output.mean()
             # Calculate gradients for G
-            errG_1.backward(mone, retain_graph=True)
+            #errG_1.backward( retain_graph=True)
             D_G_z2 = -output.mean().item()
             #Calculate Decoder loss and backprop
             output = netDec(fake)
             errG_2 = criterion(output,u)
             #calculate grad
-            errG_2.backward()
+            #errG_2.backward()
             Dec_G_z = output.mean().item()
             # Update G
-            errG = errG_1 + errG_2
-            #errG.backward()
+            errG = lambda_D*errG_1 + lambda_Dec*errG_2
+            errG.backward()
             optimizerG.step()
 
             # output right now is set to u decoded from decoder, so we can use that directly for ber
