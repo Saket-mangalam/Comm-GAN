@@ -214,7 +214,7 @@ ndf = 64
 nef = 16
 
 # Number of training epochs
-num_epochs = 50
+num_epochs = 0
 
 # Learning rate for optimizers
 lr1 = 0.0002
@@ -235,6 +235,9 @@ lambda_Dec = 0.75
 noise_std=0.0
 
 num_dec_train = 5
+
+#initial weight initialization
+initial_weight = '127863'
 
 def compute_gradient_penalty(D, real_samples, fake_samples):
     """Calculates the gradient penalty loss for WGAN GP"""
@@ -503,7 +506,13 @@ if (device.type == 'cuda') and (ngpu > 1):
 
 # Apply the weights_init function to randomly initialize all weights
 #  to mean=0, stdev=0.2.
-netG.apply(weights_init)
+if initial_weight is 'default':
+    netG.apply(weights_init)
+    pass
+else:
+    pretrained_model = torch.load('./Generators/'+initial_weight+'.pt')
+    netG.load_state_dict(pretrained_model.state_dict())
+
 
 # Print the model
 print(netG)
@@ -574,7 +583,13 @@ if (device.type == 'cuda') and (ngpu > 1):
     
 # Apply the weights_init function to randomly initialize all weights
 #  to mean=0, stdev=0.2.
-netD.apply(weights_init)
+if initial_weight is 'default':
+    netD.apply(weights_init)
+    pass
+else:
+    pretrained_model = torch.load('./Discriminators/'+initial_weight+'.pt')
+    netD.load_state_dict(pretrained_model.state_dict())
+
 
 # Print the model
 print(netD)
@@ -629,7 +644,13 @@ if (device.type == 'cuda') and (ngpu > 1):
     
 # Apply the weights_init function to randomly initialize all weights
 #  to mean=0, stdev=0.2.
-netDec.apply(weights_init)
+if initial_weight is 'default':
+    netDec.apply(weights_init)
+    pass
+else:
+    pretrained_model = torch.load('./Decoders/'+initial_weight+'.pt')
+    netDec.load_state_dict(pretrained_model.state_dict())
+
 
 # Print the model
 print(netDec)
@@ -780,6 +801,10 @@ os.makedirs('images', exist_ok=True)
 os.makedirs('images/'+identity, exist_ok=True)
 #directory for saving loss log
 os.makedirs('logbook', exist_ok=True)
+os.makedirs('Discriminators',exist_ok=True)
+os.makedirs('Generators',exist_ok=True)
+os.makedirs('Decoders',exist_ok=True)
+
 print("Starting Training Loop...")
 # For each epoch
 #
@@ -838,7 +863,7 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
 
             # Add the gradients from the all-real and all-fake batches
             errD = errD_fake - errD_real
-            wasserstein_D = errD_real - errD_fake
+            # wasserstein_D = errD_real - errD_fake
             #calculate gradient
             #errD.backward()
             #D_gp = output.mean().item()
@@ -867,14 +892,13 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #add noise to image
             channel_noise = noise_std * torch.randn(fake.shape, dtype=torch.float, device=device)
             noisy_fake = channel_noise + fake.detach()
-            for _ in range(num_dec_train):
 
-                output = netDec(noisy_fake.detach())
-                #calculate loss
-                errDec = criterion(output, u)
-                #calculate gradient
-                errDec.backward()
-                D_E_x_2 = output.mean().item()
+            output = netDec(noisy_fake.detach())
+            #calculate loss
+            errDec = criterion(output, u)
+            #calculate gradient
+            errDec.backward()
+            D_E_x_2 = output.mean().item()
             #forward pass encoded fake batch to decoder
             #output = netDec(fake_enc_img.detach())
             #calculate loss
@@ -952,14 +976,20 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
                 
             #saving log
             if batches_done == 0:
-                filewriter.writerow(['Batchnumber','D loss','G loss','Dec Loss','G2 Loss','BER Loss'])
-                filewriter.writerow([batches_done,errD.item(),errG_1.item(),errDec.item(), errG_2.item(), ber.item()])
+                filewriter.writerow(['Batchnumber','D loss','G loss','Dec Loss','G2 Loss','BER Loss','D_x','D_G_z','Dec_G_z','D_G_z2','Dec_G_z2'])
+                filewriter.writerow([batches_done,errD.item(),errG_1.item(),errDec.item(), errG_2.item(), ber.item(),D_x,D_G_z1,D_E_x_2,D_G_z2,Dec_G_z])
             else:
-                filewriter.writerow([batches_done,errD.item(),errG_1.item(),errDec.item(), errG_2.item(), ber.item()])
+                filewriter.writerow([batches_done,errD.item(),errG_1.item(),errDec.item(), errG_2.item(), ber.item(),D_x,D_G_z1,D_E_x_2,D_G_z2,Dec_G_z])
                 
                         
                 
             iters += 1
+
+#save models
+torch.save(netD.state_dict(),'Discriminators/'+identity+'.pt')
+torch.save(netG.state_dict(),'Generators/'+identity+'.pt')
+torch.save(netDec.state_dict(),'Decoders/'+identity+'.pt')
+
 
 #save_image(img_list.data[:25], 'images/'+identity+'/image.png'  , nrow=5, normalize=True)
                     
