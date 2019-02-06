@@ -214,7 +214,7 @@ ndf = 64
 nef = 16
 
 # Number of training epochs
-num_epochs = 0
+num_epochs = 100
 
 # Learning rate for optimizers
 lr1 = 0.0002
@@ -229,15 +229,15 @@ ngpu = 1
 # Variable parameters for mixing
 # lambda for gradient penalty
 lambda_gp = 10
-lambda_D = 0.25
-lambda_Dec = 0.75
+lambda_D = 0.001
+lambda_Dec = 0.999
 # mean of noise channel
-noise_std=0.0
+noise_std=0.1
 
 num_dec_train = 5
 
 #initial weight initialization
-initial_weight = '127863'
+initial_weight = 'default'
 
 def compute_gradient_penalty(D, real_samples, fake_samples):
     """Calculates the gradient penalty loss for WGAN GP"""
@@ -511,7 +511,11 @@ if initial_weight is 'default':
     pass
 else:
     pretrained_model = torch.load('./Generators/'+initial_weight+'.pt')
-    netG.load_state_dict(pretrained_model.state_dict())
+    try:
+        netG.load_state_dict(pretrained_model.state_dict())
+    except:
+        netG.load_state_dict(pretrained_model)
+
 
 
 # Print the model
@@ -550,15 +554,15 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf) x 32 x 32
             SpectralNormalization(nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False)),
-            nn.BatchNorm2d(ndf * 2),
+            #nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*2) x 16 x 16
             SpectralNormalization(nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False)),
-            nn.BatchNorm2d(ndf * 4),
+            #nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*4) x 8 x 8
             SpectralNormalization(nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False)),
-            nn.BatchNorm2d(ndf * 8),
+            #nn.BatchNorm2d(ndf * 8),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*8) x 4 x 4
             SpectralNormalization(nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)),
@@ -588,7 +592,10 @@ if initial_weight is 'default':
     pass
 else:
     pretrained_model = torch.load('./Discriminators/'+initial_weight+'.pt')
-    netD.load_state_dict(pretrained_model.state_dict())
+    try:
+        netD.load_state_dict(pretrained_model.state_dict())
+    except:
+        netD.load_state_dict(pretrained_model)
 
 
 # Print the model
@@ -649,7 +656,10 @@ if initial_weight is 'default':
     pass
 else:
     pretrained_model = torch.load('./Decoders/'+initial_weight+'.pt')
-    netDec.load_state_dict(pretrained_model.state_dict())
+    try:
+        netDec.load_state_dict(pretrained_model.state_dict())
+    except:
+        netDec.load_state_dict(pretrained_model)
 
 
 # Print the model
@@ -804,6 +814,7 @@ os.makedirs('logbook', exist_ok=True)
 os.makedirs('Discriminators',exist_ok=True)
 os.makedirs('Generators',exist_ok=True)
 os.makedirs('Decoders',exist_ok=True)
+os.makedirs('test_ber',exist_ok=True)
 
 print("Starting Training Loop...")
 # For each epoch
@@ -891,7 +902,7 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
 
             #add noise to image
             channel_noise = noise_std * torch.randn(fake.shape, dtype=torch.float, device=device)
-            noisy_fake = channel_noise + fake.detach()
+            noisy_fake = channel_noise + fake
 
             output = netDec(noisy_fake.detach())
             #calculate loss
@@ -899,6 +910,9 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #calculate gradient
             errDec.backward()
             D_E_x_2 = output.mean().item()
+            # output right now is set to u decoded from decoder, so we can use that directly for ber
+            # ber is calculated
+            ber = errors_ber(output,u)
             #forward pass encoded fake batch to decoder
             #output = netDec(fake_enc_img.detach())
             #calculate loss
@@ -933,7 +947,7 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             #errG_1.backward( retain_graph=True)
             D_G_z2 = -output.mean().item()
             #Calculate Decoder loss and backprop
-            output = netDec(fake)
+            output = netDec(noisy_fake)
             errG_2 = criterion(output,u)
             #calculate grad
             #errG_2.backward()
@@ -943,9 +957,8 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             errG.backward()
             optimizerG.step()
 
-            # output right now is set to u decoded from decoder, so we can use that directly for ber
-            # ber is calculated
-            ber = errors_ber(output, u)
+
+
              
             # Output training stats
             if i % 50 == 0:
@@ -989,6 +1002,36 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
 torch.save(netD.state_dict(),'Discriminators/'+identity+'.pt')
 torch.save(netG.state_dict(),'Generators/'+identity+'.pt')
 torch.save(netDec.state_dict(),'Decoders/'+identity+'.pt')
+
+#Initialize for evaluation
+netG.eval()
+netD.eval()
+netDec.eval()
+
+#testing parameters
+print('\nTESTING FOR DIFFERENT SNRs NOW>>>>>>>>')
+num_test_epochs = 100
+
+noise_ratio = [0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]
+with open('test_ber/' + identity + '.csv', 'w') as csvfile:
+    filewriter = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+
+    for snr in noise_ratio:
+        ber = 0.0
+        for epoch in range(num_test_epochs):
+            with torch.no_grad():
+
+                noise = torch.randn(batch_size, nz, 1, 1, device=device)
+                u = torch.randint(0, 2, (batch_size, nz, 1, 1), dtype=torch.float, device=device)
+                fake = netG(noise,u)
+                channel_noise = noise_std * torch.randn(fake.shape, dtype=torch.float, device=device)
+                noisy_fake = fake + channel_noise
+                output = netDec(noisy_fake)
+                ber += errors_ber(output,u).item()
+
+        avg_ber = ber / num_test_epochs
+        print('ber for snr : %.1f \t is %.4f' %(snr, avg_ber))
+        filewriter.writerow([snr , avg_ber])
 
 
 #save_image(img_list.data[:25], 'images/'+identity+'/image.png'  , nrow=5, normalize=True)
