@@ -204,13 +204,16 @@ nc = 3
 # Size of z latent vector (i.e. size of generator input)
 nz = 100
 
+#size of u latent vector
+nu = 200
+
 # Size of feature maps in generator
 ngf = 64
 
 # Size of feature maps in discriminator
 ndf = 64
 
-#size of feature map in encder
+#size of feature map in encoder
 nef = 16
 
 # Number of training epochs
@@ -229,10 +232,10 @@ ngpu = 1
 # Variable parameters for mixing
 # lambda for gradient penalty
 lambda_gp = 10
-lambda_D = 0.001
-lambda_Dec = 0.999
+lambda_D = 0.01
+lambda_Dec = 0.99
 # mean of noise channel
-noise_std=0.1
+noise_std=0.0
 
 num_dec_train = 5
 
@@ -310,6 +313,16 @@ dataset = dset.ImageFolder(root=dataroot,
 # Create the dataloader
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
                                          shuffle=True, num_workers=workers)
+
+#os.makedirs('./data/mnist', exist_ok=True)
+#dataloader = torch.utils.data.DataLoader(
+#            dset.MNIST('./data/mnist', train=True, download=True,
+#                    transform=transforms.Compose([
+#                        transforms.Resize(ngf),
+#                        transforms.ToTensor(),
+#                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+#                           ])),
+#            batch_size=batch_size, shuffle=True, num_workers=workers)
 
 #dataloader = torch.utils.data.DataLoader(
 #            dset.CIFAR10('./data/cifar10', train=True, download=True,
@@ -444,7 +457,7 @@ class Generator(nn.Module):
 
         self.encodable_u = nn.Sequential(
             # input is U
-            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
+            nn.ConvTranspose2d(nu, ngf * 8, 4, 1, 0, bias=False),
             nn.BatchNorm2d(ngf * 8),
             nn.ELU(0.8, inplace=True),
             # state size. (ngf*8) x 4 x 4
@@ -627,13 +640,13 @@ class Decoder(nn.Module):
             #nn.BatchNorm2d(ndf * 8),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*8) x 4 x 4
-            nn.Conv2d(ndf * 8, nz, 4, 1, 0, bias=False),
+            nn.Conv2d(ndf * 8, nu, 4, 1, 0, bias=False),
             nn.Sigmoid()
         )
 
     def forward(self, input):
         u = self.main(input)
-        u = u.view(u.shape[0],nz)
+        u = u.view(u.shape[0],nu)
         return u
 
 
@@ -718,7 +731,7 @@ mone = one * -1
 # Create batch of latent vectors that we will use to visualize
 #  the progression of the generator
 fixed_noise = torch.randn(64, nz, 1, 1, device=device)
-fixed_u = torch.randint(0, 2, (64, nz,1,1), device=device)
+fixed_u = torch.randint(0, 2, (64, nu,1,1), device=device)
 # Establish convention for real and fake labels during training
 real_label = 1
 fake_label = 0
@@ -851,7 +864,7 @@ with open('logbook/'+identity+'.csv', 'w') as csvfile:
             ## Train with all-fake batch
             # Generate batch of latent vectors
             noise = torch.randn(b_size, nz, 1, 1, device=device)
-            u = torch.randint(0, 2, (b_size, nz, 1, 1), dtype=torch.float, device=device)
+            u = torch.randint(0, 2, (b_size, nu, 1, 1), dtype=torch.float, device=device)
             # Generate fake image batch with G
             fake = netG(noise,u)
             #fake_v = autograd.Variable(fake)
