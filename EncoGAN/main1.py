@@ -198,7 +198,7 @@ img_Loss = nn.MSELoss()
 # Create batch of latent vectors that we will use to visualize
 #  the progression of the generator
 fixed_noise = torch.randn(64, nz, 1, 1, device=device)
-fixed_u = torch.randint(0, 2, (64, ud*nc,im,im), dtype=torch.float, device=device)
+fixed_u = torch.randint(0, 2, (64, ud,im,im), dtype=torch.float, device=device)
 # Establish convention for real and fake labels during training
 real_label = 1
 fake_label = 0
@@ -240,7 +240,7 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
             b_size = real_cpu.size(0)
             # Generate batch of latent vectors
             noise = torch.randn(b_size, nz, 1, 1, device=device)
-            u = torch.randint(0, 2, (b_size, ud * nc, im, im), dtype=torch.float, device=device)
+            u = torch.randint(0, 2, (b_size, ud, im, im), dtype=torch.float, device=device)
 
 
 
@@ -269,29 +269,44 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
 
             ########## Train enc discriminator, maximize log(D(x)) + log(1 - D(G(z))) ##############
             netED.zero_grad()
-            #forward pass real batch
+            # forward pass real batch
             routput = netED(real_cpu).view(-1)
-            errED_real = criterion(routput, labelr)
-            errED_real.backward()
+            errED_real1 = criterion(routput, labelr)
+            errED_real1.backward()
 
             # forward pass fake batch
-            enc_img = netE(real_cpu,u)
+            enc_img = netE(real_cpu, u)
             foutput = netED(enc_img.detach()).view(-1)
-            errED_fake = criterion(foutput, labelf)
-            errED_fake.backward()
+            errED_fake1 = criterion(foutput, labelf)
+            errED_fake1.backward()
 
-            errED = errED_fake - errED_real
-            #errED.backward()
+            errED_1 = errED_fake1 - errED_real1
+            # errED.backward()
+
+            # forward pass fake image batch
+            routput = netED(fake_img.detach()).view(-1)
+            errED_real2 = criterion(routput, labelr)
+            errED_real2.backward()
+
+            # forward pass fake enc img batch
+            fake_enc = netE(fake_img.detach(), u)
+            foutput = netED(fake_enc.detach()).view(-1)
+            errED_fake2 = criterion(foutput, labelf)
+            errED_fake2.backward()
+
+            errED_2 = errED_fake2 - errED_fake1
+
+            errED = (errED_1 + errED_2) / 2.0
 
             optimizerED.step()
 
             ########## Train decoder, maximize decinfoloss ################################
             netDec.zero_grad()
             # forward pass fake encoded images
-            fake_enc = netE(fake_img.detach(),u)
+            #fake_enc = netE(fake_img.detach(),u)
             # add noise to image
             nfake_enc = channel(fake_enc.detach(), args.noise)
-            foutput = netDec(nfake_enc.detach())
+            foutput = netDec(nfake_enc)
             errDec_fakeenc = criterion(foutput,u)
             errDec_fakeenc.backward()
             fber = errors_ber(foutput, u)
@@ -327,17 +342,20 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
 
             # forward pass for decoder loss
             u1 = netDec(enc_img)
-            errDec_fake1 = args.lambda_Dec * criterion(u1,u)
+            errDec_fake1 = criterion(u1,u)
             #errDec_fake1.backward()
 
             # forward pass for decoder loss
             u2 = netDec(fake_enc)
-            errDec_fake2 = args.lambda_Dec * criterion(u2,u)
+            errDec_fake2 = criterion(u2,u)
             #errDec_fake2.backward()
 
             errE_dec = errDec_fake1 + errDec_fake2
 
-            errE = args.lambda_D*errE_critic + args.lambda_Dec*errE_dec
+            # add image reconstruction loss
+            recon_loss = img_Loss(fake_enc,fake_img.detach())
+
+            errE = args.lambda_D*errE_critic + args.lambda_Dec*errE_dec + args.mse_wt*recon_loss
             errE.backward()
 
             optimizerE.step()
@@ -347,7 +365,6 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
             # forward pass fake batch
             foutput = netGD(fake_img).view(-1)
             errG = criterion(foutput, labelr)
-
             errG.backward()
 
             optimizerG.step()
@@ -413,7 +430,7 @@ with open('test_ber/' + identity + '.csv', 'w') as csvfile:
             with torch.no_grad():
 
                 noise = torch.randn(args.batch_size, nz, 1, 1, device=device)
-                u = torch.randint(0, 2, (args.batch_size, ud * nc, im, im), device=device)
+                u = torch.randint(0, 2, (args.batch_size, ud, im, im), device=device)
                 fake = netG(noise)
                 fake_enc = netE(fake,u)
                 noisy_fake = channel(fake_enc, snr)

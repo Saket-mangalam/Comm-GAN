@@ -232,7 +232,7 @@ print("Starting Training Loop...")
 with open('logbook/' + identity + '.csv', 'w') as csvfile:
     filewriter = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
-    for epoch in range(args.end_epoch):
+    for epoch in range(10):
         # For each batch in the dataloader
         for i, data in enumerate(dataloader, 0):
             # Format batch
@@ -240,12 +240,6 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
             b_size = real_cpu.size(0)
             # Generate batch of latent vectors
             noise = torch.randn(b_size, nz, 1, 1, device=device)
-            u = torch.randint(0, 2, (b_size, ud, im, im), dtype=torch.float, device=device)
-
-
-
-
-
 
             ########## Train gan discriminator. maximize log(D(x)) + log(1 - D(G(z))) ##############
             netGD.zero_grad()
@@ -267,28 +261,73 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
 
             optimizerGD.step()
 
+            ######### Train Generator, minimize shit ####################################
+            netG.zero_grad()
+            # forward pass fake batch
+            foutput = netGD(fake_img).view(-1)
+            errG = criterion(foutput, labelr)
+
+            errG.backward()
+
+            optimizerG.step()
+
+            # Output training stats
+            if i % 50 == 0:
+                # decoded_u = netDec(fake).detach()
+
+                print('[%d/%d][%d/%d]\tLoss_GD: %.4f\tLoss_G: %.4f'
+                      % (epoch, 10, i, len(dataloader),
+                         errGD.item(), errG.item()))
+
+    for epoch in range(args.end_epoch):
+        # For each batch in the dataloader
+        for i, data in enumerate(dataloader, 0):
+
+            # Format batch
+            real_cpu = data[0].to(device)
+            b_size = real_cpu.size(0)
+            # Generate batch of latent vectors
+            noise = torch.randn(b_size, nz, 1, 1, device=device)
+            u = torch.randint(0, 2, (64, ud,im,im), dtype=torch.float, device=device)
+            fake_img = netG(noise)
+
             ########## Train enc discriminator, maximize log(D(x)) + log(1 - D(G(z))) ##############
             netED.zero_grad()
-            #forward pass real batch
+            # forward pass real batch
             routput = netED(real_cpu).view(-1)
-            errED_real = criterion(routput, labelr)
-            errED_real.backward()
+            errED_real1 = criterion(routput, labelr)
+            errED_real1.backward()
 
             # forward pass fake batch
-            enc_img = netE(real_cpu,u)
+            enc_img = netE(real_cpu, u)
             foutput = netED(enc_img.detach()).view(-1)
-            errED_fake = criterion(foutput, labelf)
-            errED_fake.backward()
+            errED_fake1 = criterion(foutput, labelf)
+            errED_fake1.backward()
 
-            errED = errED_fake - errED_real
-            #errED.backward()
+            errED_1 = errED_fake1 - errED_real1
+            # errED.backward()
+
+            # forward pass fake image batch
+            routput = netED(fake_img.detach()).view(-1)
+            errED_real2 = criterion(routput, labelr)
+            errED_real2.backward()
+
+            # forward pass fake enc img batch
+            fake_enc = netE(fake_img.detach(), u)
+            foutput = netED(fake_enc.detach()).view(-1)
+            errED_fake2 = criterion(foutput, labelf)
+            errED_fake2.backward()
+
+            errED_2 = errED_fake2 - errED_fake1
+
+            errED = (errED_1 + errED_2) / 2.0
 
             optimizerED.step()
 
             ########## Train decoder, maximize decinfoloss ################################
             netDec.zero_grad()
             # forward pass fake encoded images
-            fake_enc = netE(fake_img.detach(),u)
+            #fake_enc = netE(fake_img.detach(),u)
             # add noise to image
             nfake_enc = channel(fake_enc.detach(), args.noise)
             foutput = netDec(nfake_enc)
@@ -315,50 +354,45 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
             netE.zero_grad()
             # forward pass fake batch
             foutput = netED(enc_img).view(-1)
-            errGD_fake1 = args.lambda_D * criterion(foutput, labelr)
-            errGD_fake1.backward(retain_graph=True)
+            errGD_fake1 = criterion(foutput, labelr)
+            #errGD_fake1.backward(retain_graph=True)
 
             #forward pass real batch
             routput = netED(fake_enc).view(-1)
-            errGD_fake2 = args.lambda_D * criterion(routput, labelr)
-            errGD_fake2.backward(retain_graph=True)
+            errGD_fake2 = criterion(routput, labelr)
+            #errGD_fake2.backward(retain_graph=True)
 
             errE_critic = errGD_fake1 + errGD_fake2
 
             # forward pass for decoder loss
             u1 = netDec(enc_img)
-            errDec_fake1 = args.lambda_Dec * criterion(u1,u)
-            errDec_fake1.backward()
+            errDec_fake1 = criterion(u1,u)
+            #errDec_fake1.backward()
 
             # forward pass for decoder loss
             u2 = netDec(fake_enc)
-            errDec_fake2 = args.lambda_Dec * criterion(u2,u)
-            errDec_fake2.backward()
+            errDec_fake2 = criterion(u2,u)
+            #errDec_fake2.backward()
 
             errE_dec = errDec_fake1 + errDec_fake2
 
-            errE = errE_critic + errE_dec
-            #errE.backward()
+            # forward pass for image recostruction loss
+            recon_loss = img_Loss(fake_enc, fake_img.detach())
+
+            errE = args.lambda_D*errE_critic + args.lambda_Dec*errE_dec + args.mse_wt*recon_loss
+            errE.backward()
 
             optimizerE.step()
 
-            ######### Train Generator, minimize shit ####################################
-            netG.zero_grad()
-            # forward pass fake batch
-            foutput = netGD(fake_img).view(-1)
-            errG = criterion(foutput, labelr)
 
-            errG.backward()
-
-            optimizerG.step()
 
             # Output training stats
             if i % 50 == 0:
                 # decoded_u = netDec(fake).detach()
 
-                print('[%d/%d][%d/%d]\tLoss_GD: %.4f\tLoss_ED: %.4f\tLoss_G: %.4f\tLoss_Dec: %.4f\tLoss_Enc: %.4f\tBER_Loss: %.4f'
+                print('[%d/%d][%d/%d]\tLoss_ED: %.4f\tLoss_Dec: %.4f\tLoss_Enc: %.4f\tBER_Loss: %.4f'
                       % (epoch, args.end_epoch, i, len(dataloader),
-                         errGD.item(), errED.item(), errG.item(), errDec.item(), errE.item(), ber))
+                      errED.item(), errDec.item(), errE.item(), ber))
 
             batches_done = epoch * len(dataloader) + i
 
@@ -376,12 +410,12 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
             # saving log
             if batches_done == 0:
                 filewriter.writerow(
-                        ['Batchnumber', 'GD loss', 'G loss', 'Dec Loss', 'ED Loss', 'E Loss', 'BER Loss'])
+                        ['Batchnumber', 'Dec Loss', 'ED Loss', 'E Loss', 'BER Loss'])
                 filewriter.writerow(
-                    [batches_done, errGD, errG, errDec, errED, errE, ber])
+                    [batches_done, errDec, errED, errE, ber])
             else:
                 filewriter.writerow(
-                    [batches_done, errGD, errG, errDec, errED, errE, ber])
+                    [batches_done, errDec, errED, errE, ber])
 
             iters += 1
 
@@ -413,7 +447,7 @@ with open('test_ber/' + identity + '.csv', 'w') as csvfile:
             with torch.no_grad():
 
                 noise = torch.randn(args.batch_size, nz, 1, 1, device=device)
-                u = torch.randint(0, 2, (args.batch_size, ud, im, im), device=device)
+                u = torch.randint(0, 2, (args.batch_size, ud * nc, im, im), device=device)
                 fake = netG(noise)
                 fake_enc = netE(fake,u)
                 noisy_fake = channel(fake_enc, snr)

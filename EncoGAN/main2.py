@@ -146,27 +146,6 @@ else:
 # Print the model
 #print(netDec)
 
-# Create the gan discriminator
-netGD = GanDiscriminator(args).to(device)
-
-# Handle multi-gpu if desired
-if (device.type == 'cuda') and (args.ngpu > 1):
-    netGD = nn.DataParallel(netGD, list(range(args.ngpu)))
-
-# Apply the weights_init function to randomly initialize all weights
-#  to mean=0, stdev=0.2.
-if args.model_id is 'default':
-    netGD.apply(weights_init)
-    pass
-else:
-    pretrained_model = torch.load('./GDiscriminators/'+args.model_id+'.pt')
-    try:
-        netGD.load_state_dict(pretrained_model.state_dict())
-    except:
-        netGD.load_state_dict(pretrained_model)
-
-# Print the model
-#print(netGD)
 
 # Create the enc discriminator
 netED = EncDiscriminator(args).to(device)
@@ -204,7 +183,6 @@ real_label = 1
 fake_label = 0
 
 # Setup Adam optimizers for both G and D
-optimizerGD = optim.Adam(netGD.parameters(), lr=args.learning_rate, betas=(args.beta1, args.beta2))
 optimizerED = optim.Adam(netED.parameters(), lr=args.learning_rate, betas=(args.beta1, args.beta2))
 optimizerG = optim.Adam(netG.parameters(), lr=args.learning_rate, betas=(args.beta1, args.beta2))
 optimizerE = optim.Adam(netE.parameters(), lr=args.learning_rate, betas=(args.beta1, args.beta2))
@@ -247,118 +225,75 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
 
 
 
-            ########## Train gan discriminator. maximize log(D(x)) + log(1 - D(G(z))) ##############
-            netGD.zero_grad()
+            ########## Train discriminator. maximize log(D(x)) + log(1 - D(G(z))) ##############
+            netED.zero_grad()
             # forward pass real batch
             labelr = torch.full((b_size,), real_label, device=device)
-            routput = netGD(real_cpu).view(-1)
-            errGD_real = criterion(routput, labelr)
-            errGD_real.backward()
-
-            #forward pass fake batch
-            labelf = torch.full((b_size,), fake_label, device=device)
-            fake_img = netG(noise)
-            foutput = netGD(fake_img.detach()).view(-1)
-            errGD_fake = criterion(foutput, labelf)
-            errGD_fake.backward()
-
-            errGD = errGD_fake - errGD_real
-            #errGD.backward()
-
-            optimizerGD.step()
-
-            ########## Train enc discriminator, maximize log(D(x)) + log(1 - D(G(z))) ##############
-            netED.zero_grad()
-            #forward pass real batch
             routput = netED(real_cpu).view(-1)
             errED_real = criterion(routput, labelr)
             errED_real.backward()
 
-            # forward pass fake batch
-            enc_img = netE(real_cpu,u)
-            foutput = netED(enc_img.detach()).view(-1)
+            #forward pass fake batch
+            labelf = torch.full((b_size,), fake_label, device=device)
+            fake_img = netE(netG(noise),u)
+            foutput = netED(fake_img.detach()).view(-1)
             errED_fake = criterion(foutput, labelf)
             errED_fake.backward()
 
             errED = errED_fake - errED_real
-            #errED.backward()
+            #errGD.backward()
 
             optimizerED.step()
 
+
             ########## Train decoder, maximize decinfoloss ################################
             netDec.zero_grad()
-            # forward pass fake encoded images
-            fake_enc = netE(fake_img.detach(),u)
             # add noise to image
-            nfake_enc = channel(fake_enc.detach(), args.noise)
-            foutput = netDec(nfake_enc)
+            nfake_img = channel(fake_img.detach(), args.noise)
+            foutput = netDec(nfake_img)
             errDec_fakeenc = criterion(foutput,u)
             errDec_fakeenc.backward()
             fber = errors_ber(foutput, u)
 
-            #forward pass real encoded images
-            # add noise to enc image
-            nenc_img = channel(enc_img.detach(), args.noise)
-            routput = netDec(nenc_img)
-            errDec_realenc = criterion(routput,u)
-            errDec_realenc.backward()
-            rber  = errors_ber(routput, u)
 
-            errDec = (errDec_fakeenc + errDec_realenc)/2.0
+            errDec = errDec_fakeenc
             #errDec.backward()
 
-            ber = (fber.item() + rber.item())/2.0
+            ber = fber.item()
 
             optimizerDec.step()
 
-            ########## Train Encoder, minimize ##########################################
+
+            ########## Train Encoder + generator, minimize ##########################################
             netE.zero_grad()
-            # forward pass fake batch
-            foutput = netED(enc_img).view(-1)
-            errGD_fake1 = args.lambda_D * criterion(foutput, labelr)
-            errGD_fake1.backward(retain_graph=True)
-
-            #forward pass real batch
-            routput = netED(fake_enc).view(-1)
-            errGD_fake2 = args.lambda_D * criterion(routput, labelr)
-            errGD_fake2.backward(retain_graph=True)
-
-            errE_critic = errGD_fake1 + errGD_fake2
-
-            # forward pass for decoder loss
-            u1 = netDec(enc_img)
-            errDec_fake1 = args.lambda_Dec * criterion(u1,u)
-            errDec_fake1.backward()
-
-            # forward pass for decoder loss
-            u2 = netDec(fake_enc)
-            errDec_fake2 = args.lambda_Dec * criterion(u2,u)
-            errDec_fake2.backward()
-
-            errE_dec = errDec_fake1 + errDec_fake2
-
-            errE = errE_critic + errE_dec
-            #errE.backward()
-
-            optimizerE.step()
-
-            ######### Train Generator, minimize shit ####################################
             netG.zero_grad()
             # forward pass fake batch
-            foutput = netGD(fake_img).view(-1)
-            errG = criterion(foutput, labelr)
+            foutput = netED(fake_img).view(-1)
+            errGD_fake = criterion(foutput, labelr)
+            #errGD_fake1.backward(retain_graph=True)
 
-            errG.backward()
+            # forward pass for decoder loss
+            u1 = netDec(fake_img)
+            errDec_fake = criterion(u1,u)
+            #errDec_fake1.backward()
 
+            errE = args.lambda_D*errGD_fake + args.lambda_Dec*errDec_fake
+            errE.backward()
+
+            errG = errE
+
+            optimizerE.step()
             optimizerG.step()
+
+
 
             # Output training stats
             if i % 50 == 0:
                 # decoded_u = netDec(fake).detach()
 
-                print('[%d/%d][%d/%d]\tLoss_GD: %.4f\tLoss_ED: %.4f\tLoss_G: %.4f\tLoss_Dec: %.4f\tLoss_Enc: %.4f\tBER_Loss: %.4f'
+                print('[%d/%d][%d/%d]\tLoss_ED: %.4f\tLoss_G: %.4f\tLoss_Dec: %.4f\tLoss_Enc: %.4f\tBER_Loss: %.4f'
                       % (epoch, args.end_epoch, i, len(dataloader),
-                         errGD.item(), errED.item(), errG.item(), errDec.item(), errE.item(), ber))
+                         errED.item(), errG.item(), errDec.item(), errE.item(), ber))
 
             batches_done = epoch * len(dataloader) + i
 
@@ -376,17 +311,16 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
             # saving log
             if batches_done == 0:
                 filewriter.writerow(
-                        ['Batchnumber', 'GD loss', 'G loss', 'Dec Loss', 'ED Loss', 'E Loss', 'BER Loss'])
+                        ['Batchnumber', 'G loss', 'Dec Loss', 'ED Loss', 'E Loss', 'BER Loss'])
                 filewriter.writerow(
-                    [batches_done, errGD, errG, errDec, errED, errE, ber])
+                    [batches_done, errG, errDec, errED, errE, ber])
             else:
                 filewriter.writerow(
-                    [batches_done, errGD, errG, errDec, errED, errE, ber])
+                    [batches_done, errG, errDec, errED, errE, ber])
 
             iters += 1
 
 # save models
-torch.save(netGD.state_dict(), 'GDiscriminators/' + identity + '.pt')
 torch.save(netED.state_dict(), 'EDiscriminators/' + identity + '.pt')
 torch.save(netE.state_dict(), 'Decoders/' + identity + '.pt')
 torch.save(netG.state_dict(), 'Generators/' + identity + '.pt')
@@ -394,7 +328,6 @@ torch.save(netDec.state_dict(), 'Decoders/' + identity + '.pt')
 
 # Initialize for evaluation
 netG.eval()
-netGD.eval()
 netED.eval()
 netE.eval()
 netDec.eval()
