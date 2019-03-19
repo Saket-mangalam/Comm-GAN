@@ -390,13 +390,21 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
             # Check how the generator is doing by saving G's output on fixed_noise
             if (iters % 500 == 0) or ((epoch == args.end_epoch - 1) and (i == len(dataloader) - 1)):
                 with torch.no_grad():
-
+                    v_noise = torch.randn(64, nz, 1, 1, device=device)
+                    v_u = torch.randint(0, 2, (64, ud, im, im), device=device)
+                    v_fake = netG(v_noise).detach()
+                    v_enc = netE(v_fake, v_u).detach()
                     fake = netG(fixed_noise).detach()
                     fake_enc = netE(fake, fixed_u).detach()
 
                 save_image(fake.data[:25], 'images/' + identity + '/fake%d.png' % batches_done, nrow=5,
                            normalize=True)
-                save_image(fake_enc.data[:25], 'images/'+identity+'/fake_enc%d.png' % batches_done, nrow=5, normalize=True)
+                save_image(fake_enc.data[:25], 'images/' + identity + '/fake_enc%d.png' % batches_done, nrow=5,
+                           normalize=True)
+                save_image(v_fake.data[:25], 'images/' + identity + '/v_fake%d.png' % batches_done, nrow=5,
+                           normalize=True)
+                save_image(v_enc.data[:25], 'images/' + identity + '/v_enc%d.png' % batches_done, nrow=5,
+                           normalize=True)
 
             # saving log
             if batches_done == 0:
