@@ -18,11 +18,11 @@ class Basic_Decoder(nn.Module):
             # input is (nc) x 64 x 64
             nn.Conv2d(self.nc, self.ndf, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.ndf),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2, inplace=False),
             # state size is ndf x 64 x64
             nn.Conv2d(self.ndf, self.ndf, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.ndf),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2, inplace=False),
             # state size is ndf x 64 x64
             nn.Conv2d(self.ndf, self.ud, 3, 1, 1, bias=False),
             nn.Sigmoid()
@@ -48,21 +48,21 @@ class Dense_Decoder(nn.Module):
             #input is nc x 64 x64
             nn.Conv2d(self.nc, self.ndf, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.ndf),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.LeakyReLU(0.2, inplace=False)
         )
 
         self.decode1 = nn.Sequential(
             #input is ndf x 64 x64
             nn.Conv2d(self.ndf, self.ndf, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.ndf),
-            nn.LeakReLU(0.2, inplace=True)
+            nn.LeakyReLU(0.2, inplace=False)
         )
 
         self.decode2 = nn.Sequential(
             #input is 2*ndf x 64x 64
             nn.Conv2d((2*self.ndf), self.ndf, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.ndf),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.LeakyReLU(0.2, inplace=False)
         )
 
         self.decode3 = nn.Sequential(
@@ -72,7 +72,7 @@ class Dense_Decoder(nn.Module):
         )
 
     def forward(self, img):
-        output1 = self.dec_img(img)
+        output1 = self.dec_Img(img)
         output2 = self.decode1(output1)
         output3 = torch.cat([output1, output2], dim=1)
         output3 = self.decode2(output3)

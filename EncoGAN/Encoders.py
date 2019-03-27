@@ -18,18 +18,18 @@ class Basic_Encoder(nn.Module):
             # input is (nc) x 64 x 64
             nn.Conv2d(self.nc, self.nef, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.nef),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.LeakyReLU(0.2, inplace=False)
         )
 
         self.encode = nn.Sequential(
             #input is (nef+ ud) x 64 x 64
             nn.Conv2d((self.nef + self.ud), self.nef, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.nef),
-            nn.LeakyReLU(0.2, inplace= True),
+            nn.LeakyReLU(0.2, inplace= False),
             # input is nef x 64 x64
             nn.Conv2d(self.nef, self.nef, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.nef),
-            nn.LeakyReLU(0.2, inplace= True),
+            nn.LeakyReLU(0.2, inplace= False),
             # input is ned x 64 x64
             nn.Conv2d(self.nef, self.nc, 3, 1, 1, bias=False),
             nn.Tanh()
@@ -58,7 +58,7 @@ class Residual_Encoder(nn.Module):
             #input is nc X 64X64
             nn.Conv2d(self.nc,self.nef, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.nef),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.LeakyReLU(0.2, inplace=False)
 
         )
 
@@ -66,13 +66,13 @@ class Residual_Encoder(nn.Module):
             #input is nef + ud X64X64
             nn.Conv2d((self.nef + self.ud), self.nef, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.nef),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2, inplace=False),
             #input is nef x 64 x64
             nn.Conv2d(self.nef, self.nef, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.nef),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2, inplace=False),
             #input is nef X 64x64
-            nn.Conv2d((self.nef+self.nc),self.nc, 3, 1, 1, bias=False)
+            nn.Conv2d(self.nef,self.nc, 3, 1, 1, bias=False)
         )
 
         self.tanh = nn.Sequential(
@@ -104,28 +104,28 @@ class Dense_Encoder(nn.Module):
             #state size nc X 64 x64
             nn.Conv2d(self.nc, self.nef, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.nef),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.LeakyReLU(0.2, inplace=False)
         )
 
         self.encode1 = nn.Sequential(
             #statesize is nef+_ud X 64 x64
             nn.Conv2d((self.nef+self.ud), self.nef, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.nef),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.LeakyReLU(0.2, inplace=False)
         )
 
         self.encode2 = nn.Sequential(
             #statesize is 2*nef + ud X 64 x64
             nn.Conv2d((2*self.nef + self.ud), self.nef, 3, 1, 1, bias=False),
             nn.BatchNorm2d(self.nef),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.LeakyReLU(0.2, inplace=False)
         )
 
         self.encode3 = nn.Sequential(
             #state size is 3*nef + ud X 64 x64
-            nn.Conv2d((3*self.nef + self.ud), self.nef, 3, 1, 1, bias=False),
-            nn.batchNorm2d(self.nef),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.Conv2d((3*self.nef + self.ud), self.nc, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(self.nc),
+            nn.LeakyReLU(0.2, inplace=False)
         )
 
         self.tanh = nn.Sequential(
@@ -144,5 +144,5 @@ class Dense_Encoder(nn.Module):
         output4 += img
         output4 = self.tanh(output4)
         return output4
-    
+
 
