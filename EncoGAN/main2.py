@@ -16,27 +16,43 @@ from torchvision.utils import save_image
 import numpy as np
 from utils import channel, errors_ber, weights_init
 
-from Generators import Generator
-from Encoders import Encoder
-from Decoders import Decoder
-from Discriminators import Discriminator as EncDiscriminator
-from Discriminators import Discriminator as GanDiscriminator
-
-
 # Set random seem for reproducibility
 manualSeed = 999
-#manualSeed = random.randint(1, 10000) # use if you want new results
+# manualSeed = random.randint(1, 10000) # use if you want new results
 print("Random Seed: ", manualSeed)
 random.seed(manualSeed)
 torch.manual_seed(manualSeed)
 
 # import arguments
-args= get_args()
+args = get_args()
 nc = args.img_channels
 nz = args.zlatent
 bs = args.batch_size
 ud = args.bitsperpix
 im = args.img_size
+
+######################################################
+##### Select models #################################
+#######################################################
+if args.gtype == 'dcgan':
+    from Generators import DCGANGenerator as Generator
+
+if args.etype == 'basic':
+    from Encoders import Basic_Encoder as Encoder
+elif args.etype == 'res':
+    from Encoders import Residual_Encoder as Encoder
+elif args.etype == 'dense':
+    from Encoders import Dense_Encoder as Encoder
+
+if args.dectype == 'basic':
+    from Decoders import Basic_Decoder as Decoder
+elif args.dectype == 'dense':
+    from Decoders import Dense_Decoder as Decoder
+
+if args.dtype == 'dcgan':
+    from Discriminators import DCGANDiscriminator as EncDiscriminator
+    #from Discriminators import DCGANDiscriminator as GanDiscriminator
+
 ######################################################################
 # Data
 # ----
@@ -44,41 +60,43 @@ im = args.img_size
 # We can use an image folder dataset the way we have it setup.
 # Create the dataset
 # Create the dataset
-dataset = dset.ImageFolder(root=args.list_dir,
-                           transform=transforms.Compose([
-                               transforms.Resize(args.img_size),
-                               transforms.CenterCrop(args.img_size),
-                               transforms.ToTensor(),
-                               transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                           ]))
+if args.data == 'celeba':
+    dataset = dset.ImageFolder(root=args.list_dir,
+                               transform=transforms.Compose([
+                                   transforms.Resize(args.img_size),
+                                   transforms.CenterCrop(args.img_size),
+                                   transforms.ToTensor(),
+                                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                               ]))
 
-#Create the dataloader
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
-                                         shuffle=True, num_workers=args.num_workers)
+    # Create the dataloader
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
+                                             shuffle=True, num_workers=args.num_workers)
 
 # os.makedirs(args.list_dir, exist_ok=True)
-# dataloader = torch.utils.data.DataLoader(
-#            dset.MNIST('./data/mnist', train=True, download=True,
-#                    transform=transforms.Compose([
-#                        transforms.Resize(args.img_size),
-#                        transforms.ToTensor(),
-#                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-#                           ])),
-#            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+elif args.data == 'mnist':
+    dataloader = torch.utils.data.DataLoader(
+        dset.MNIST('./data/mnist', train=True, download=True,
+                   transform=transforms.Compose([
+                       transforms.Resize(args.img_size),
+                       transforms.ToTensor(),
+                       transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                   ])),
+        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
-#dataloader = torch.utils.data.DataLoader(
-#            dset.CIFAR10('./data/cifar10', train=True, download=True,
-#                           transform=transforms.Compose([
-#                                transforms.Resize(args.img_size),
-#                                #transforms.CenterCrop(args.img_size),
-#                                transforms.ToTensor(),
-#                                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-#                            ])),
-#            batch_size=args.batch_size, shuffle=True,num_workers=args.num_workers)
+elif args.data == 'cifar10':
+    dataloader = torch.utils.data.DataLoader(
+        dset.CIFAR10('./data/cifar10', train=True, download=True,
+                     transform=transforms.Compose([
+                         transforms.Resize(args.img_size),
+                         # transforms.CenterCrop(args.img_size),
+                         transforms.ToTensor(),
+                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                     ])),
+        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
 # Decide which device we want to run on
 device = torch.device("cuda:0" if (torch.cuda.is_available() and args.ngpu > 0) else "cpu")
-
 
 # Create the generator
 netG = Generator(args).to(device)
