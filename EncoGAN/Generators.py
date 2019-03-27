@@ -4,9 +4,9 @@ import torch
 
 
 
-class Generator(nn.Module):
+class DCGANGenerator(nn.Module):
     def __init__(self, args):
-        super(Generator, self).__init__()
+        super(DCGANGenerator, self).__init__()
 
         self.args = args
         self.nc = self.args.img_channels

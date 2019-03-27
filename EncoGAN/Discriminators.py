@@ -3,9 +3,9 @@ import torch
 
 
 
-class Discriminator(nn.Module):
+class DCGANDiscriminator(nn.Module):
     def __init__(self, args):
-        super(Discriminator, self).__init__()
+        super(DCGANDiscriminator, self).__init__()
         self.args = args
         self.nc = self.args.img_channels
         self.ndf = self.args.disc_lat
