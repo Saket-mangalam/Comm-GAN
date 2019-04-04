@@ -6,7 +6,7 @@ def get_args():
     parser.add_argument("-ngpu", type=int, default=1, help="gpu number to use, \
                     multiple ids should be e.g. 0,1,2,3)")
     parser.add_argument("-gtype", choices=['dcgan','wgan'], default='dcgan', help="generator type")
-    parser.add_argument("-etype", choices=['basic', 'res', 'dense'], default='basic', help="encoder type")
+    parser.add_argument("-etype", choices=['basic', 'res', 'dense', 'dres'], default='basic', help="encoder type")
     parser.add_argument("-dtype", choices=['dcgan', 'wgan'], default='dcgan', help="discriminator type")
     parser.add_argument("-dectype", choices=['basic', 'dense'], default='basic', help="decoder type")
     parser.add_argument("-num_workers", type=int, default=2, help="number of parallel workers")

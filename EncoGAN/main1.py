@@ -45,6 +45,8 @@ elif args.etype == 'res':
     from Encoders import Residual_Encoder as Encoder
 elif args.etype == 'dense':
     from Encoders import Dense_Encoder as Encoder
+elif args.etype == 'dres':
+    from Encoders import DenseRes_Encoder as Encoder
 
 if args.dectype == 'basic':
     from Decoders import Basic_Decoder as Decoder
@@ -410,9 +412,9 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                     fake = netG(fixed_noise).detach()
                     fake_enc = netE(fake, fixed_u).detach()
 
-                save_image(fake.data[:25], 'images/' + identity + '/fake%d.png' % batches_done, nrow=5,
-                           normalize=True)
-                save_image(fake_enc.data[:25], 'images/'+identity+'/fake_enc%d.png' % batches_done, nrow=5, normalize=True)
+                #save_image(fake.data[:25], 'images/' + identity + '/fake%d.png' % batches_done, nrow=5,
+                #           normalize=True)
+                #save_image(fake_enc.data[:25], 'images/'+identity+'/fake_enc%d.png' % batches_done, nrow=5, normalize=True)
                 save_image(v_fake.data[:25], 'images/' + identity + '/v_fake%d.png' % batches_done, nrow=5,
                            normalize=True)
                 save_image(v_enc.data[:25], 'images/' + identity + '/v_enc%d.png' % batches_done, nrow=5,
