@@ -477,7 +477,7 @@ with open('test_ber/' + identity + '.csv', 'w') as csvfile:
             with torch.no_grad():
 
                 noise = torch.randn(args.batch_size, nz, 1, 1, device=device)
-                u = torch.randint(0, 2, (args.batch_size, ud * nc, im, im), device=device)
+                u = torch.randint(0, 2, (args.batch_size, ud, im, im), device=device)
                 fake = netG(noise)
                 fake_enc = netE(fake,u)
                 noisy_fake = channel(fake_enc, snr)

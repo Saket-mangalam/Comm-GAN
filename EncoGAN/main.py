@@ -343,7 +343,7 @@ with open('test_ber/' + identity + '.csv', 'w') as csvfile:
                     output = netDec(noisy_fake)
                     ber += errors_ber(output,u).item()
 
-        avg_ber = ber / num_test_epochs
+        avg_ber = ber / (num_test_epochs*len(dataloader))
         print('ber for snr : %.1f \t is %.4f' %(snr, avg_ber))
         filewriter.writerow([snr , avg_ber])
 
