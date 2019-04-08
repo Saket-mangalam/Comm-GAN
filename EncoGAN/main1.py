@@ -435,7 +435,7 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
 # save models
 torch.save(netGD.state_dict(), 'GDiscriminators/' + identity + '.pt')
 torch.save(netED.state_dict(), 'EDiscriminators/' + identity + '.pt')
-torch.save(netE.state_dict(), 'Decoders/' + identity + '.pt')
+torch.save(netE.state_dict(), 'Encoders/' + identity + '.pt')
 torch.save(netG.state_dict(), 'Generators/' + identity + '.pt')
 torch.save(netDec.state_dict(), 'Decoders/' + identity + '.pt')
 
