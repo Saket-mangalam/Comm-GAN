@@ -1,15 +1,17 @@
 import torch.nn as nn
 import torch
 import numpy as np
+import os
+from collections import Counter
 
 # custom weights initialization called on netG and netD
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
         nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
+    # elif classname.find('BatchNorm') != -1:
+    #     nn.init.normal_(m.weight.data, 1.0, 0.02)
+    #     nn.init.constant_(m.bias.data, 0)
 
 #BER Loss of Decoder
 def errors_ber(y_pred, y_true):
@@ -55,3 +57,124 @@ def channel(encoded_imgs, noise_std, channel_type = 'awgn', device = torch.devic
     else:
         noise        = noise_std * torch.randn(encoded_imgs.shape, dtype=torch.float).to(device)
         return encoded_imgs + noise
+
+
+
+import zlib
+from math import exp
+
+import torch
+from reedsolo import RSCodec
+from torch.nn.functional import conv2d
+
+rs = RSCodec(250)
+
+
+def text_to_bits(text):
+    """Convert text to a list of ints in {0, 1}"""
+    return bytearray_to_bits(text_to_bytearray(text))
+
+
+def bits_to_text(bits):
+    """Convert a list of ints in {0, 1} to text"""
+    return bytearray_to_text(bits_to_bytearray(bits))
+
+
+def bytearray_to_bits(x):
+    """Convert bytearray to a list of bits"""
+    result = []
+    for i in x:
+        bits = bin(i)[2:]
+        bits = '00000000'[len(bits):] + bits
+        result.extend([int(b) for b in bits])
+
+    return result
+
+
+def bits_to_bytearray(bits):
+    """Convert a list of bits to a bytearray"""
+    ints = []
+    #print(bits)
+    for b in range(len(bits) // 8):
+        byte = bits[b * 8:(b + 1) * 8]
+        #print(int(''.join([str(int(bit)) for bit in byte]), 2))
+        ints.append(int(''.join([str(int(bit)) for bit in byte]), 2))
+    #print(bytearray(ints))
+    return bytearray(ints)
+
+
+def text_to_bytearray(text):
+    """Compress and add error correction"""
+    assert isinstance(text, str), "expected a string"
+    x = zlib.compress(text.encode("utf-8"))
+    x = rs.encode(bytearray(x))
+
+    return x
+
+
+def bytearray_to_text(x):
+    """Apply error correction and decompress"""
+    try:
+        text = rs.decode(x)
+        text = zlib.decompress(text)
+        #text = text.decode("utf-8")
+        return text.decode("utf-8")
+    except BaseException:
+        return False
+
+def _make_payload(width, height, depth, text):
+    """
+    This takes a piece of text and encodes it into a bit vector. It then
+    fills a matrix of size (width, height) with copies of the bit vector.
+    """
+    message = text_to_bits(text) + [0] * 32
+
+    payload = message
+    while len(payload) < width * height * depth:
+        payload += message
+
+    payload = payload[:width * height * depth]
+
+    return torch.FloatTensor(payload).view(1, depth, height, width)
+
+def encoded_message(batchsize, data_depth, img_size, text):
+    """Encode an image.
+    Args:
+        cover (str): Path to the image to be used as cover.
+        output (str): Path where the generated image will be saved.
+        text (str): Message to hide inside the image.
+    """
+
+    payload = _make_payload(img_size, img_size, data_depth, text)
+    print(payload.size())
+    payload = payload.expand(batchsize, data_depth, img_size, img_size)
+    #replicate payload over batchsize
+    #payload = payload.expand(batchsize, data_depth, img_size, img_size)
+    print(payload.size())
+    #payload = payload.to(device)
+    return payload
+
+def decoded_message(bit_message):
+
+    # split and decode messages
+    #bit_message = bit_message.view(-1)
+    candidates = Counter()
+    bits = bit_message.data.cpu().numpy().tolist()
+    #print(bits)
+    #print(len(bits))
+    for candidate in bits_to_bytearray(bits).split(b'\x00\x00\x00\x00'):
+        candidate = bytearray_to_text(bytearray(candidate))
+        #print(candidate)
+        if candidate:
+            candidates[candidate] += 1
+
+    candidate = 'No message found'
+    # choose most common message
+    if len(candidates) == 0:
+        #raise ValueError('Failed to find message.')
+        print('Failed to find message.')
+    else:
+        #candidate, _ = candidates.most_common(1)[0]
+        candidate, count = candidates.most_common(1)[0]
+
+    return candidate
