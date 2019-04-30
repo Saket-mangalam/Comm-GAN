@@ -146,11 +146,11 @@ def encoded_message(batchsize, data_depth, img_size, text):
     """
 
     payload = _make_payload(img_size, img_size, data_depth, text)
-    print(payload.size())
+    #print(payload.size())
     payload = payload.expand(batchsize, data_depth, img_size, img_size)
     #replicate payload over batchsize
     #payload = payload.expand(batchsize, data_depth, img_size, img_size)
-    print(payload.size())
+    #print(payload.size())
     #payload = payload.to(device)
     return payload
 
@@ -168,11 +168,11 @@ def decoded_message(bit_message):
         if candidate:
             candidates[candidate] += 1
 
-    candidate = 'No message found'
+
     # choose most common message
     if len(candidates) == 0:
         #raise ValueError('Failed to find message.')
-        print('Failed to find message.')
+        candidate = 'No message found'
     else:
         #candidate, _ = candidates.most_common(1)[0]
         candidate, count = candidates.most_common(1)[0]
