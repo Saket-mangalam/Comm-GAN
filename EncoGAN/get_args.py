@@ -10,16 +10,17 @@ def get_args():
     parser.add_argument("-dtype", choices=['dcgan', 'wgan'], default='dcgan', help="discriminator type")
     parser.add_argument("-dectype", choices=['basic', 'dense'], default='basic', help="decoder type")
     parser.add_argument("-num_workers", type=int, default=2, help="number of parallel workers")
-    parser.add_argument("-img_channels", type=int, default=3, help="length for height/width of square patch")
+    parser.add_argument("-img_channels", type=int, default=1, help="length for height/width of square patch")
     parser.add_argument("-batch_size", type=int, default=128, help="mini-batch size")
-    parser.add_argument("-img_size", type=int, default=64, help="image size for training")
+    parser.add_argument("-img_size", type=int, default=32, help="image size for training")
     parser.add_argument("-learning_rate", type=float, default=0.0002, help="learning rate, \
                     use value from origin paper as default")
     parser.add_argument("-beta1", type=float, default=0.5, help="momentum")
     parser.add_argument("-beta2", type=float, default=0.99, help="momentum")
-    parser.add_argument("-data", choices=['celeba','mnist','cifar','coco'], default='celeba', help="Dataset to use")
+    parser.add_argument("-data", choices=['celeba','mnist','cifar','coco'], default='mnist', help="Dataset to use")
     parser.add_argument("-list_dir", type=str, default="./data/celeba", help="path to dir containing training & validation \
                     should be list_dir")
+    parser.add_argument("-message", type=str, default="Saket Mangalam", help="Message to be encoded")
     parser.add_argument("-lambda_D", type=float, default = 0.5, help = "relative weight of discriminator")
     parser.add_argument("-lambda_Dec", type=float, default=0.5, help="relative weight of decoder")
     parser.add_argument("-mse_wt", type=float, default=1.0, help="relative weight of mse loss")
@@ -37,6 +38,12 @@ def get_args():
     parser.add_argument("-val_freq", type=int, default=50, help="model validation frequency(of epoches)")
     parser.add_argument("-model_id", type=str, default='default', help="model id of saved pretrained model weights")
     parser.add_argument("-noise", type=float, default=0.0, help="noise std added after encoder channel")
+
+    # Quantization related value
+    parser.add_argument('-quantize', type=int, default=1, help="downsampling levels. 1 means there is no quantization")
+    parser.add_argument('-enc_clipping', choices=['inputs', 'gradient', 'both', 'default'], default='both', help = 'only valid for group_norm quantization')
+    parser.add_argument('-enc_value_limit', type=float, default=1.0, help = 'only valid for group_norm quantization')
+    parser.add_argument('-enc_grad_limit', type=float, default=0.01, help = 'only valid for group_norm quantization')
 
     opt = parser.parse_args()
     print(opt)

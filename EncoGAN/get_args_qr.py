@@ -22,10 +22,10 @@ def get_args():
     parser.add_argument("-img_size", type=int, default=64, help="image size for training")
     parser.add_argument("-info_img_size", type=int, default=64, help="image size for training")
 
-    parser.add_argument('-block_len', type=int, default=81)
+    parser.add_argument('-block_len', type=int, default=100)
 
-    parser.add_argument("-data", choices=['celeba','mnist','cifar10','lsun','coco'], default='mnist', help="Lsun/Coco not supported yet.")
-    parser.add_argument("-test_folder", choices=['test','test3','celeba'], default='test3', help="folder name of testset")
+    parser.add_argument("-data", choices=['test3', 'test', 'test2', 'celeba','mnist','cifar10','lsun','coco'], default='mnist', help="Lsun/Coco not supported yet.")
+    parser.add_argument("-test_folder", choices=['test','test2','test3','celeba'], default='test3', help="folder name of testset")
 
     # Training Hyperparameter setup
     parser.add_argument("-batch_size", type=int, default=4, help="mini-batch size")

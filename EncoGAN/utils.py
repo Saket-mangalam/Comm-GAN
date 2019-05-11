@@ -145,7 +145,7 @@ def encoded_message(batchsize, data_depth, img_size, text):
         text (str): Message to hide inside the image.
     """
 
-    payload = _make_payload(img_size, img_size, data_depth, text)
+    payload = _make_payload(img_size, img_size, 1, text)
     #print(payload.size())
     payload = payload.expand(batchsize, data_depth, img_size, img_size)
     #replicate payload over batchsize

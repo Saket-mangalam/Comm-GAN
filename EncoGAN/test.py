@@ -99,7 +99,8 @@ if args.img_channels == 1: # grayscale
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=bs,
                                                  shuffle=True, num_workers=args.num_workers)
 else:
-    dataset = dset.ImageFolder(root='./data/'+args.test_folder,  #./data/celeba
+    #dataset = dset.ImageFolder(root='./data/'+args.test_folder,  #./data/celeba
+    dataset = dset.ImageFolder(root='./data/test3/',  # ./data/celeba
                                transform=transforms.Compose([
                                    transforms.RandomRotation((90, 90)),
                                    transforms.Resize(args.img_size),
@@ -204,7 +205,7 @@ with open('logbook/' + args.model_id + 'noise.csv', 'w') as csvfile:
                 noisy_decoded = netDec(noisy_encoded)
                 ber = errors_ber(decoded_u, u)
                 nber = errors_ber(noisy_decoded, u)
-                #print(ber.item(), nber.item())
+                print(ber.item(), nber.item())
                 #find in entire batch
                 for i in range(len(decoded_u)):
 
@@ -212,10 +213,14 @@ with open('logbook/' + args.model_id + 'noise.csv', 'w') as csvfile:
                     single_u = torch.round(decoded_u[i]).view(-1)
                     noisysingle_u = torch.round(noisy_decoded[i]).view(-1)
                     #print(single_u.size())
-                    #single_u = torch.round(torch.sum(torch.round(decoded_u[i]), dim=0) / 3).view(-1)
+                    #single_u = torch.round(torch.sum(torch.round(decoded_u[i]), dim=0) / 3.0).view(-1)
+                    single_u = torch.round(torch.sum(decoded_u[i], dim=0) / 3.0).view(-1)
                     #print(single_u.size())
 
-                    #print(decoded_u.data)
+                    print('this is something', errors_ber(single_u, u[i]))
+
+                    print(single_u)
+                    print(decoded_u.data)
                     #convert to string from bits
                     dec_message1 = decoded_message(single_u)
                     dec_message2 = decoded_message(noisysingle_u)
