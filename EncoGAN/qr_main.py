@@ -11,6 +11,7 @@ import os
 import csv
 import random
 import torch
+import math
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data
@@ -40,6 +41,13 @@ bs = args.batch_size
 ud = int(args.bitsperpix)
 im = args.img_size
 im_u = args.info_img_size
+#import initial training ratios suggested by trainer
+encdec_wt = args.enc_lambda_Dec
+encdisc_wt = args.enc_lambda_D
+encmse_wt = args.enc_mse_wt
+gend1_wt = args.G_lambda_D1
+gend2_wt = args.G_lambda_D2
+gendec_wt = args.G_lambda_Dec
 
 ######################################################
 ##### Select models #################################
@@ -521,10 +529,10 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 errE_dec = errDec_fake1 + errDec_fake2
 
                 # forward pass image reconstruction loss
-                recon_loss = img_Loss(nfake_img,nfake_enc) + img_Loss(nreal_cpu, nenc_img)
+                recon_loss = (img_Loss(nfake_img,nfake_enc) + img_Loss(nreal_cpu, nenc_img))/2.0
 
                 # weight different losses.
-                errE = args.enc_lambda_D*errE_critic + args.enc_lambda_Dec*errE_dec + args.enc_mse_wt*recon_loss
+                errE = encdec_wt*errE_critic + encdisc_wt*errE_dec + encmse_wt*recon_loss
                 errE.backward()
 
                 optimizerE.step()
@@ -561,11 +569,61 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 u3 = netDec(channel(fake_enc, args.awgn, args))
                 errGDec = criterion(u3, u)
 
-                errG = args.G_lambda_D1*errGDisc  + args.G_lambda_D2*errEDisc + args.G_lambda_Dec * errGDec
+                errG = gend1_wt*errGDisc  + gend2_wt*errEDisc + gendec_wt * errGDec
 
                 errG.backward()
 
                 optimizerG.step()
+
+            #####################################################################
+            ##  ADPTIVE TRAINING : SAKET VERSION#######################
+            #### LETS HOPE THIS WORKS ##########
+            #####################################################################
+            if (0.5*math.exp(-0.2*epoch))>ber and epoch>5:
+                #only do this when ber is not below the expected limit line 0.5e(-0.2epoch)
+                if errED<0.05:
+                    if errGD<0.05:
+                        #increase the ratio of decoder weight without changing the discriminator weights
+                        #equivalent to saying more focus on decoding
+                        #cuz image looks good
+                        encdec_wt += 0.01
+                        gendec_wt += 0.01
+                    else:
+                        #Generator is not able to generate good images
+                        # fix that, increase weight on generator discriminator
+                        gend1_wt += 0.01
+                        gend2_wt -= 0.01
+                        encdec_wt += 0.01 #decoders weight will always increase since limit is not met
+                        #gendec_wt += 0.01
+                else:
+                    if errGD<0.05:
+                        #this means encoder's discriminator is performing bad but generator's is good
+                        #fix this by adding weights on enc discriminator in encoder loss
+                        encdisc_wt += 0.01
+                        encdec_wt += 0.01
+                        gendec_wt += 0.01
+                        if recon_loss > 5000:
+                            encmse_wt += 0.01
+                    else:
+                        #both are bad adjust weights on both discriminator. increase it and increase dec
+                        encdisc_wt += 0.01
+                        gend1_wt += 0.01
+                        #gend2_wt += 0.01
+                        #gendec_wt += 0.01
+                        if recon_loss > 5000:
+                            encmse_wt += 0.01
+
+            #normalize to sum 1 generator's lambdas and encoder's lambdas separately
+            sumgen = gend1_wt + gend2_wt + gendec_wt
+            sumenc = encmse_wt + encdec_wt + encdisc_wt
+            gend1_wt = float(gend1_wt)/sumgen
+            gend2_wt = float(gend2_wt)/sumgen
+            gendec_wt = float(gendec_wt)/sumgen
+            encdisc_wt = float(encdisc_wt)/sumenc
+            encdec_wt = float(encdec_wt)/sumenc
+            encmse_wt = float(encmse_wt)/sumenc
+
+
             #######################################################################
             # Output training stats
             #######################################################################
