@@ -80,6 +80,7 @@ class Dense_Decoder(nn.Module):
             if iter!=args.num_layer_Dec-1:
                 this_enc = nn.Sequential(
                     nn.Conv2d(this_input_channel, this_output_channel, 3, 1, 1, bias=True),
+                    nn.BatchNorm2d(this_output_channel),
                     nn.LeakyReLU(0.2, inplace=False)
                 )
             else:

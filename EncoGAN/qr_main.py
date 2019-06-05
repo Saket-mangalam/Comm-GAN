@@ -23,6 +23,7 @@ import numpy as np
 from utils import errors_ber, weights_init
 from channels import channel, channel_test
 from quantizer import quantizer, bsc, add_qr # a differentiable quantizer.
+from fidscore import calculate_fid
 
 # Set random seem for reproducibility
 manualSeed = 999
@@ -334,6 +335,7 @@ img_Loss  = nn.MSELoss()
 #  the progression of the generator
 fixed_noise = torch.randn(args.batch_size, nz, 1, 1, dtype=torch.float,device=device)
 fixed_u     = torch.randint(0, 2, (args.batch_size, ud,im_u,im_u), dtype=torch.float, device=device)
+fixed_u = fixed_u/255
 # Establish convention for real and fake labels during training
 real_label = 1
 fake_label = 0
@@ -381,6 +383,7 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
             labelr     = torch.full((b_size,), real_label, device=device)
             labelf     = torch.full((b_size,), fake_label, device=device)
 
+            #normalize = transforms.Normalize(mean=0.5, std=0.5)
             #######################################################################
             # Train gan discriminator (D1). maximize log(D(x)) + log(1 - D(G(z)))
             #######################################################################
@@ -414,6 +417,7 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 netED.zero_grad()
 
                 u     = torch.randint(0, 2, (b_size, ud, im_u, im_u), dtype=torch.float, device=device)
+                #ustar = u/255
 
                 # 1st pass: real batch, not encoded, QR code quantize/add noise the image
                 routput     = netED(nreal_cpu).view(-1)
@@ -456,6 +460,7 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 netDec.zero_grad()
 
                 u     = torch.randint(0, 2, (b_size, ud, im_u, im_u), dtype=torch.float, device=device)
+                #ustar = u/255
 
                 # forward pass fake encoded images
                 # add noise to image
@@ -463,9 +468,11 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 fake_enc    = netE(fake_img.detach(), u)
                 nfake_enc   = channel(fake_enc.detach(), args.awgn, args)
                 foutput     = netDec(nfake_enc.detach())
-
+                #foutput     = foutput*255
+                #foutput = normalize(foutput)
                 errDec_fakeenc = criterion(foutput,u)
                 errDec_fakeenc.backward()
+
                 fber = errors_ber(foutput, u)
 
                 #forward pass real encoded images
@@ -473,6 +480,8 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 enc_img = netE(real_cpu,u)
                 nenc_img = channel(enc_img.detach(), args.awgn, args)
                 routput = netDec(nenc_img)
+                #routput = routput*255
+                #routput = normalize(routput)
                 errDec_realenc = criterion(routput,u)
                 errDec_realenc.backward()
                 rber  = errors_ber(routput, u)
@@ -493,6 +502,7 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 netE.zero_grad()
 
                 u     = torch.randint(0, 2, (b_size, ud, im_u, im_u), dtype=torch.float, device=device)
+                #ustar = u/255
 
                 ############################
                 # D2 Discriminator Loss
@@ -518,12 +528,16 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 # forward pass for decoder loss
                 #nenc_img = channel(enc_img, args.awgn, args)
                 u1 = netDec(nenc_img)
+                #u1 = u1*255
+                #u1 = normalize(u1)
 
                 errDec_fake1 = criterion(u1,u)
 
                 # forward pass for decoder loss
                 #nfake_enc  = channel(fake_enc, args.awgn, args)
                 u2 = netDec(nfake_enc)
+                #u2 = u2*255
+                #u2 = normalize(u2)
                 errDec_fake2 = criterion(u2,u)
 
                 errE_dec = errDec_fake1 + errDec_fake2
@@ -532,7 +546,7 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 recon_loss = (img_Loss(nfake_img,nfake_enc) + img_Loss(nreal_cpu, nenc_img))/2.0
 
                 # weight different losses.
-                errE = encdec_wt*errE_critic + encdisc_wt*errE_dec + encmse_wt*recon_loss
+                errE = encdisc_wt*errE_critic + encdec_wt*errE_dec + encmse_wt*recon_loss
                 errE.backward()
 
                 optimizerE.step()
@@ -546,6 +560,7 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 netG.zero_grad()
 
                 u     = torch.randint(0, 2, (b_size, ud, im_u, im_u), dtype=torch.float, device=device)
+                #ustar = u/255
 
                 # forward pass fake batch,D1 loss
                 fake_img   = netG(noise)
@@ -567,6 +582,8 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 # forward pass fake batch, Dec loss
                 # forward pass encoded fake batch
                 u3 = netDec(channel(fake_enc, args.awgn, args))
+                #u3 = u3*255
+                #u3 = normalize(u3)
                 errGDec = criterion(u3, u)
 
                 errG = gend1_wt*errGDisc  + gend2_wt*errEDisc + gendec_wt * errGDec
@@ -579,49 +596,28 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
             ##  ADPTIVE TRAINING : SAKET VERSION#######################
             #### LETS HOPE THIS WORKS ##########
             #####################################################################
-            if (0.5*math.exp(-0.2*epoch))>ber and epoch>5:
-                #only do this when ber is not below the expected limit line 0.5e(-0.2epoch)
-                if errED<0.05:
-                    if errGD<0.05:
-                        #increase the ratio of decoder weight without changing the discriminator weights
-                        #equivalent to saying more focus on decoding
-                        #cuz image looks good
-                        encdec_wt += 0.01
-                        gendec_wt += 0.01
-                    else:
-                        #Generator is not able to generate good images
-                        # fix that, increase weight on generator discriminator
-                        gend1_wt += 0.01
-                        gend2_wt -= 0.01
-                        encdec_wt += 0.01 #decoders weight will always increase since limit is not met
-                        #gendec_wt += 0.01
-                else:
-                    if errGD<0.05:
-                        #this means encoder's discriminator is performing bad but generator's is good
-                        #fix this by adding weights on enc discriminator in encoder loss
-                        encdisc_wt += 0.01
-                        encdec_wt += 0.01
-                        gendec_wt += 0.01
-                        if recon_loss > 5000:
-                            encmse_wt += 0.01
-                    else:
-                        #both are bad adjust weights on both discriminator. increase it and increase dec
-                        encdisc_wt += 0.01
-                        gend1_wt += 0.01
-                        #gend2_wt += 0.01
-                        #gendec_wt += 0.01
-                        if recon_loss > 5000:
-                            encmse_wt += 0.01
+            fidgen=0
+            fidenc=0
+            #if epoch>10:
+            #    fidgen = calculate_fid(real_cpu, fake_img, cuda=True, dims=2048)
+            #    fidenc1 = calculate_fid(real_cpu, enc_img, cuda=True, dims=2048)
+            #    fidenc2 = calculate_fid(fake_img, fake_enc, cuda=True, dims=2048)
+            #    fidenc = (fidenc1+fidenc2)/2
+                #if (0.5*math.exp(-0.2*epoch))>ber and epoch>10:
+                    #this means decoder loss is not going down
+                    #calculate fid for generator
+
+                    #continue
 
             #normalize to sum 1 generator's lambdas and encoder's lambdas separately
-            sumgen = gend1_wt + gend2_wt + gendec_wt
-            sumenc = encmse_wt + encdec_wt + encdisc_wt
-            gend1_wt = float(gend1_wt)/sumgen
-            gend2_wt = float(gend2_wt)/sumgen
-            gendec_wt = float(gendec_wt)/sumgen
-            encdisc_wt = float(encdisc_wt)/sumenc
-            encdec_wt = float(encdec_wt)/sumenc
-            encmse_wt = float(encmse_wt)/sumenc
+            #sumgen = gend1_wt + gend2_wt + gendec_wt
+            #sumenc = encmse_wt + encdec_wt + encdisc_wt
+            #gend1_wt = float(gend1_wt)/sumgen
+            #gend2_wt = float(gend2_wt)/sumgen
+            #gendec_wt = float(gendec_wt)/sumgen
+            #encdisc_wt = float(encdisc_wt)/sumenc
+            #encdec_wt = float(encdec_wt)/sumenc
+            #encmse_wt = float(encmse_wt)/sumenc
 
 
             #######################################################################
@@ -629,9 +625,9 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
             #######################################################################
             if i % 50 == 0:
                 if args.num_train_D1 and args.num_train_D2 and args.num_train_Enc and args.num_train_Dec and args.num_train_G:
-                    print('[%d/%d][%d/%d]\tLoss_GD: %.4f\tLoss_ED: %.4f\tLoss_G: %.4f\tLoss_Dec: %.4f\tLoss_Enc: %.4f\tBER_Loss: %.4f'
+                    print('[%d/%d][%d/%d]\tLoss_GD: %.4f\tLoss_ED: %.4f\tLoss_G: %.4f\tLoss_Dec: %.4f\tLoss_Enc: %.4f\tBER_Loss: %.4f\tFID gen: %.4f\tFID enc: %.4f'
                           % (epoch, args.num_epoch, i, len(dataloader),
-                             errGD.item(), errED.item(), errG.item(), errDec.item(), errE.item(), ber))
+                             errGD.item(), errED.item(), errG.item(), errDec.item(), errE.item(), ber, fidgen, fidenc))
                 else:
                     print('[%d/%d][%d/%d]\tBER:%.4f'% (epoch, args.num_epoch, i, len(dataloader), ber))
                     errGD, errG, errDec, errED, errE = 0.0,0.0, 0.0, 0.0, 0.0
@@ -643,6 +639,7 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
                 with torch.no_grad():
                     v_noise    = torch.randn(real_cpu.shape[0], nz, 1, 1, dtype=torch.float,device=device)
                     v_u        = torch.randint(0, 2, (real_cpu.shape[0], ud, im_u, im_u), dtype=torch.float,device=device)
+                    #v_u = v_u/255
 
                     v_fake     = netG(v_noise).detach()
                     v_fake_enc = netE(v_fake, v_u).detach()
@@ -673,12 +670,12 @@ with open('logbook/' + identity + '.csv', 'w') as csvfile:
             # saving log
             if batches_done == 0:
                 filewriter.writerow(
-                        ['Batchnumber', 'GD loss', 'G loss', 'Dec Loss', 'ED Loss', 'E Loss', 'BER Loss'])
+                        ['Batchnumber', 'GD loss', 'G loss', 'Dec Loss', 'ED Loss', 'E Loss', 'BER Loss', 'FID Gen', 'FID Enc'])
                 filewriter.writerow(
-                    [batches_done, errGD, errG, errDec, errED, errE, ber])
+                    [batches_done, errGD.item(), errG.item(), errDec.item(), errED.item(), errE.item(), ber, fidgen, fidenc])
             else:
                 filewriter.writerow(
-                    [batches_done, errGD, errG, errDec, errED, errE, ber])
+                    [batches_done, errGD.item(), errG.item(), errDec.item(), errED.item(), errE.item(), ber, fidgen, fidenc])
 
             iters += 1
 
@@ -689,6 +686,9 @@ torch.save(netE.state_dict(), 'Encoders/' + identity + '.pt')
 torch.save(netG.state_dict(), 'Generators/' + identity + '.pt')
 torch.save(netDec.state_dict(), 'Decoders/' + identity + '.pt')
 
+#print weights ratios
+print("encoder weight",encdisc_wt,encdec_wt,encmse_wt)
+print("generator weight", gend1_wt,gend2_wt,gendec_wt)
 # Initialize for evaluation
 netG.eval()
 netGD.eval()
@@ -721,16 +721,19 @@ with open('test_ber/' + identity+'_awgn' + '.csv', 'w') as csvfile:
 
                 noise = torch.randn(args.batch_size, nz, 1, 1, device=device)
                 u = torch.randint(0, 2, (args.batch_size, ud, im_u, im_u), device=device)
+                #ustar = u/255
                 fake = netG(noise)
 
                 fake_enc = netE(fake,u)
                 noisy_fake = channel_test(fake_enc,snr, args, mode = 'awgn')
                 output = netDec(noisy_fake)
+                #output = output*255
                 fake_this_ber += errors_ber(output,u).item()
 
                 real_enc = netE(real_cpu,u)
-                noisy_real = channel_test(fake_enc,snr, args, mode = 'awgn')
+                noisy_real = channel_test(real_enc,snr, args, mode = 'awgn')
                 output = netDec(noisy_real)
+                #output = output*255
                 real_this_ber += errors_ber(output,u).item()
 
         real_avg_ber = real_this_ber / num_test_epochs
