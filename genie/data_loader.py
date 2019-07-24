@@ -102,7 +102,18 @@ def get_data(args):
                                  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                              ])),
                 batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+        elif args.data == 'coco':
+            dataloader = torch.utils.data.DataLoader(
+                dset.CocoCaptions('.data/coco',
+                                  transform = transforms.Compose([
+                                      transforms.Resize(args.img_size),
+                                      transforms.CenterCrop(args.img_size),
+                                      transforms.ToTensor(),
+                                      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                                  ])),
+                batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers
+            )
         else:
-            print('coco and lsun not supported yet!')
+            print('lsun not supported yet!')
 
     return dataloader

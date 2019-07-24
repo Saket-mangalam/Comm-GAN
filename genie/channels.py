@@ -125,15 +125,17 @@ def channel(encoded_imgs, args):
     return encoded_imgs
 
 def slide_channel(encoded_imgs, sl_size, sl_dim):
+    #mask = torch.zeros(encoded_imgs.size).to(device)
     batch_size, s, l1, l2 = encoded_imgs.shape[0], encoded_imgs.shape[1], encoded_imgs.shape[2], encoded_imgs.shape[3]
+    noisy = encoded_imgs.clone()
     if sl_dim == 'height':
         random_start = np.random.randint(1, (l1-sl_size))
-        encoded_imgs[:,:,random_start:(random_start+sl_size),:]  = -1
+        noisy[:,:,random_start:(random_start+sl_size),:]  = -1
     else:
         random_start = np.random.randint(1, (l2-sl_size))
-        encoded_imgs[:,:,:,random_start:(random_start+sl_size)]
+        noisy[:,:,:,random_start:(random_start+sl_size)]  = -1
 
-    return encoded_imgs
+    return noisy
 
 
 

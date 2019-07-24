@@ -113,7 +113,7 @@ def get_args():
     parser.add_argument('-awgn', type=bool, default=False, help="put noise std. 0.0 means there is no AWGN noise")
     parser.add_argument('-noise_std', type=float, default=0.0, help="standard deviation of noise being added as AWGN")
     parser.add_argument('-sp', type=bool, default=False, help="put salt&pepper prob. 0.0 means there is no s-p noise")
-    parser.add_argument('-sp_size', type=int, default=0.5, help="block size of salt and pepper channel")
+    parser.add_argument('-sp_size', type=float, default=0.5, help="block size of salt and pepper channel")
     parser.add_argument('-slide', type=bool, default=False, help="put sliding window or not")
     parser.add_argument('-sl_size', type=int, default= 10, help="thickness of sliding window")
     parser.add_argument('-sl_dim', type=str, default = 'height', help ="slide channel along height or width")
